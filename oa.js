@@ -33,7 +33,8 @@
     hookShortMenu();
     window.addEventListener('load', function () {
       setTimeout(addExportBtn, 1000);
-      setTimeout(autoFormPlan, loadFormTimes);
+      setTimeout(autoFillFormPlan, loadFormTimes);
+      setTimeout(autoFillFormWeekLog, loadFormTimes);
     });
   }
 
@@ -62,7 +63,7 @@
   /** =================================== 自动填充明日/下周工作计划 ============================================ */
 
   /** 自动填充表单明日/下周工作计划 */
-  function autoFormPlan() {
+  function autoFillFormPlan() {
     // 是否为编辑模式
     const operatorBar = document.querySelector('#start-operator');
     if (!operatorBar || !operatorBar.outerHTML.includes('提交申请')) {
@@ -78,7 +79,7 @@
     }
 
     // 获取计划输入框
-    const planTextarea = queryFormPlanTextarea(formcontent);
+    const planTextarea = queryFormTextarea(formcontent, ['明日工作计划', '下周工作计划']);
     if (!planTextarea) {
       log('【检查页面】', '未找到计划输入框');
       return;
@@ -126,20 +127,22 @@
     return formcontent;
   }
 
-  /** 获取获取表单中 明日/下周工作计划 输入框 */
-  function queryFormPlanTextarea(formContent) {
-    if (!formContent) return;
-    let planTextarea = formContent.querySelectorAll('textarea');
-    if (!planTextarea || !planTextarea.length) return;
-    planTextarea.forEach((item) => {
+  /** 获取获取表单中 输入框 */
+  function queryFormTextarea(formContent, fields = []) {
+    if (!formContent || !fields.length) return;
+    let formTextareas = formContent.querySelectorAll('textarea');
+    if (!formTextareas || !formTextareas.length) return;
+    let formTextarea = null;
+    formTextareas.forEach((item) => {
       const fsref = item.getAttribute('fsref');
       if (!fsref) return;
-      if (fsref.includes('明日工作计划') || fsref.includes('下周工作计划')) {
-        planTextarea = item;
+      const textareas = fields.filter((field) => fsref.includes(field));
+      if (textareas.length) {
+        formTextarea = item;
         return;
       }
     });
-    return planTextarea;
+    return formTextarea;
   }
 
   /** 获取最新日志 */
@@ -189,6 +192,100 @@
         reject(error);
       }
     });
+  }
+
+  /** =================================== 自动填充本周工作总结 ============================================ */
+
+  /** 自动填充表单本周工作总结 */
+  function autoFillFormWeekLog() {
+    // 是否为编辑模式
+    const operatorBar = document.querySelector('#start-operator');
+    if (!operatorBar || !operatorBar.outerHTML.includes('提交申请')) {
+      log('【检查页面】', '非表单编辑页面');
+      return;
+    }
+
+    // 获取表单
+    const formcontent = queryIFrameFormContent(document);
+    if (!formcontent) {
+      log('【检查页面】', '未找到表单');
+      return;
+    }
+
+    // 获取本周工作总结输入框
+    const weekLogTextarea = queryFormTextarea(formcontent, ['本周工作总结']);
+    if (!weekLogTextarea) {
+      log('【检查页面】', '未找到本周工作总结输入框');
+      return;
+    }
+
+    fillFormWeekLog(weekLogTextarea);
+  }
+
+  /** 填充表单本周工作总结内容 */
+  async function fillFormWeekLog(weekLogTextarea) {
+    if (!weekLogTextarea) return;
+
+    try {
+      // 获取本周所有日志
+      const logListRes = await getWeekDailyLogList();
+      const logList = ((logListRes || {}).Data || {}).Data || [];
+      log('【本周日志列表】', logList);
+      if (!logList.length) {
+        return toast('获取本周日志列表失败');
+      }
+
+      // 获取本周所有日志详情
+      const logDetails = await Promise.all(logList.map((log) => getDailyContent(log.ProcessId)));
+      log('【本周日志详情】', logDetails);
+      if (!logDetails || !logDetails.length) {
+        return toast('获取本周日志详情失败');
+      }
+
+      // 合并本周所有日志
+      let weekLogs = '';
+      logDetails.reverse().forEach((log) => {
+        if (!log || !log.content) return;
+        weekLogs += `${log.content}\n\n`;
+      });
+
+      // TODO: AI 整理内容
+
+      // 填充本周工作总结
+      weekLogTextarea.value = weekLogs;
+    } catch (error) {
+      log('【本周工作总结】', '填充本周工作总结内容失败');
+    }
+  }
+
+  function getWeekDailyLogList() {
+    const data = {
+      page: 1,
+      pageSize: 7,
+      sort: 'CreateTime-desc',
+      filter: `(TaskName~contains~'日计划'~and~(CreateTime~gte~datetime'${getMonday()}T00-00-00'~and~CreateTime~lte~datetime'${getSunday()}T23-59-59'))`,
+      // filter: `(TaskName~contains~'日计划'~and~(CreateTime~gte~datetime'2025-02-10T00-00-00'~and~CreateTime~lte~datetime'2025-02-16T23-59-59'))`, // for test
+      filterMode: 0,
+    };
+    return request({ url: logListUrl, data });
+  }
+
+  // 获取本周一日期 YYYY-MM-DD
+  function getMonday() {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    today.setDate(diff);
+    return today.toISOString().split('T')[0];
+  }
+
+  // 获取本周日日期 YYYY-MM-DD
+  function getSunday() {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diff = today.getDate() + (7 - dayOfWeek);
+    today.setDate(diff);
+    return today.toISOString().split('T')[0];
   }
 
   /** =================================== 导出全年周志 ============================================ */
