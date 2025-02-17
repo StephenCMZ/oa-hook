@@ -17,7 +17,7 @@
   const logListUrl = '/api/Workflow/FlowList/GetRequireList';
   const logDetailUrl = '/api/Workflow/FlowMan/GetDetail';
   const logContentUrl = '/api/Form/ExternalDataSource/GetDataList';
-  const workFlowDetailUrl = '/extra/workflow/detail';
+  const workFlowDetailUrl = '/api/Workflow/FlowMan/GetPrint';
 
   const year = new Date().getFullYear().toString();
   const pageSize = 200;
@@ -102,14 +102,14 @@
       }
 
       // 获取日志计划内容
-      const planContent = await getDailyPlanContent(lastDailyLog.ProcessId);
-      if (!planContent || !planContent.length) {
+      const planContent = await getDailyContent(lastDailyLog.ProcessId);
+      if (!planContent || !planContent.plan) {
         log('【表单计划】', '获取最近日报计划内容失败');
         return;
       }
 
       // 填充计划内容
-      planTextarea.value = planContent;
+      planTextarea.value = planContent.plan;
     } catch (error) {
       log('【表单计划】', '填充计划内容失败');
     }
@@ -120,8 +120,7 @@
     if (!document) return;
     const formIframe = document.querySelectorAll('#iFrameResizer0');
     if (!formIframe || !formIframe.length) return;
-    const iframeDocument =
-      formIframe[0].contentDocument || formIframe[0].contentWindow.document;
+    const iframeDocument = formIframe[0].contentDocument || formIframe[0].contentWindow.document;
     if (!iframeDocument) return;
     const formcontent = iframeDocument.querySelector('#formcontent');
     return formcontent;
@@ -155,40 +154,40 @@
     return request({ url: logListUrl, data });
   }
 
-  /** 获取日志计划内容 */
-  function getDailyPlanContent(processId) {
-    return new Promise((resolve, reject) => {
-      if (!processId) return reject('【计划内容】', '未传入 processId');
-      const pageUrl = baseUrl + workFlowDetailUrl + ';processId=' + processId;
+  /** 获取日志内容 */
+  function getDailyContent(processId) {
+    return new Promise(async (resolve, reject) => {
+      if (!processId) return reject('【日志详情】', '未传入 processId');
+      try {
+        const dailyContentRes = await request({
+          url: workFlowDetailUrl,
+          method: 'GET',
+          data: {
+            processId,
+            showForm: true,
+            showAttList: false,
+            showHisList: false,
+            t: new Date().getTime(),
+          },
+        });
 
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      document.body.appendChild(iframe);
-      iframe.src = pageUrl;
+        var doc = document.createElement('div');
+        doc.innerHTML = dailyContentRes;
+        const user = doc.querySelectorAll('[fsref="db.姓名"]')[0]?.getAttribute('value');
+        const dept = doc.querySelectorAll('[fsref="db.所属部门"]')[0]?.getAttribute('value');
+        const date = doc.querySelectorAll('[fsref="db.日期"]')[0]?.getAttribute('value');
+        const time = doc.querySelectorAll('[fsref="db.时间"]')[0]?.getAttribute('value');
+        const content = doc.querySelectorAll('[fsref="db.今天工作总结"]')[0]?.getAttribute('value');
+        const plan = doc.querySelectorAll('[fsref="db.明日工作计划"]')[0]?.getAttribute('value');
+        const experience = doc.querySelectorAll('[fsref="db.工作心得体会"]')[0]?.getAttribute('value');
+        const dailyContent = { user, dept, date, time, content, plan, experience };
+        log('【日志详情】', dailyContent);
 
-      iframe.onload = () => {
-        setTimeout(() => {
-          const iframeDoc =
-            iframe.contentDocument || iframe.contentWindow.document;
-          if (!iframeDoc) return reject('获取 iframe 文档失败');
-
-          const formcontent = queryIFrameFormContent(iframeDoc);
-          if (!formcontent) return reject('获取 formcontent 失败');
-
-          const planTextarea = queryFormPlanTextarea(formcontent);
-          if (!planTextarea) return reject('获取 planTextarea 失败');
-
-          const planText = planTextarea.getAttribute('fsoriginal');
-          if (!planText) return reject('获取 planText 失败');
-
-          document.body.removeChild(iframe);
-          resolve(planText);
-        }, loadFormTimes);
-      };
-      iframe.onerror = () => {
-        document.body.removeChild(iframe);
-        reject('表单 iframe 加载失败');
-      };
+        resolve(dailyContent);
+      } catch (error) {
+        log('【日志详情】', error);
+        reject(error);
+      }
     });
   }
 
@@ -247,9 +246,7 @@
       }
 
       // 获取周志详情
-      const logDetailRes = await Promise.all(
-        logList.map((log) => getWeeklyLogDetail(log.ProcessId)),
-      );
+      const logDetailRes = await Promise.all(logList.map((log) => getWeeklyLogDetail(log.ProcessId)));
       const logDetails = (logDetailRes || []).map((res) => {
         const data = (res || {}).Data || {};
         return { FormId: data.FormId, TaskName: data.TaskName };
@@ -348,23 +345,15 @@
   function getAuthorization() {
     return new Promise((resolve) => {
       authorization =
-        JSON.parse(
-          sessionStorage.getItem(
-            'UniWork.user:http://oa.gdytw.net/identity:appjs',
-          ) || '{}',
-        ).access_token || '';
+        JSON.parse(sessionStorage.getItem('UniWork.user:http://oa.gdytw.net/identity:appjs') || '{}').access_token ||
+        '';
       authorization.length ? resolve(authorization) : resolve('');
     });
   }
 
   /** 拦截请求 */
   function hookRequest({ url, fun }) {
-    if (
-      !url ||
-      !url.length ||
-      !fun ||
-      Object.prototype.toString.call(fun) !== '[object Function]'
-    ) {
+    if (!url || !url.length || !fun || Object.prototype.toString.call(fun) !== '[object Function]') {
       return;
     }
     const originOpen = XMLHttpRequest.prototype.open;
@@ -382,8 +371,12 @@
   }
 
   /** 主动请求 */
-  function request({ url, data }) {
+  function request({ url, data, method = 'POST' }) {
     return new Promise(async (resolve, reject) => {
+      if (method !== 'POST' && method !== 'GET') {
+        return reject('请求方法错误');
+      }
+
       // 获取授权
       if (!authorization || !authorization.length) {
         const auth = await getAuthorization();
@@ -395,20 +388,33 @@
 
       // 发起请求
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', baseUrl + url, true);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.setRequestHeader('Authorization', 'Bearer ' + authorization);
-      data = JSON.stringify(data || {});
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-          const res = JSON.parse(xhr.responseText);
-          if (res.Status !== 200) return reject(xhr.responseText);
-          resolve(res);
-        } else if (xhr.readyState === 4) {
-          reject(xhr.responseText);
-        }
-      };
-      xhr.send(data);
+      if (method === 'POST') {
+        xhr.open('POST', baseUrl + url, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('Authorization', 'Bearer ' + authorization);
+        data = JSON.stringify(data || {});
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+            const res = JSON.parse(xhr.responseText);
+            if (res.Status !== 200) return reject(xhr.responseText);
+            resolve(res);
+          } else if (xhr.readyState === 4) {
+            reject(xhr.responseText);
+          }
+        };
+        xhr.send(data);
+      } else {
+        data = new URLSearchParams({ ...data, access_token: authorization });
+        xhr.open('GET', baseUrl + url + '?' + data, true);
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+            resolve(xhr.responseText);
+          } else if (xhr.readyState === 4) {
+            reject(xhr.responseText);
+          }
+        };
+        xhr.send(data);
+      }
     });
   }
 
