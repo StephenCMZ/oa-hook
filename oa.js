@@ -5,6 +5,8 @@
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
 // @downloadURL  https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
 // @updateURL    https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
@@ -25,7 +27,7 @@
   const cozeChatUrl = 'https://api.coze.cn/v3/chat';
   const cozeRetrieveUrl = 'https://api.coze.cn/v3/chat/retrieve';
   const cozeMessageUrl = 'https://api.coze.cn/v3/chat/message/list';
-  const cozeAccessToken = '';
+  let cozeAccessToken = getConfig('cozeAccessToken') || '';
   const cozeBotId = '7472312758722560039';
 
   const year = new Date().getFullYear().toString();
@@ -41,6 +43,7 @@
   function init() {
     hookShortMenu();
     window.addEventListener('load', function () {
+      setTimeout(addSettingBtn, 1000);
       setTimeout(addExportBtn, 1000);
       setTimeout(autoFillFormPlan, loadFormTimes);
       setTimeout(autoFillFormWeekLog, loadFormTimes);
@@ -319,35 +322,36 @@
   /** 导航栏添加 下载周志 按钮 */
   function addExportBtn() {
     var navBar = document.querySelector('#top-global');
-    if (navBar && navBar.firstChild.id !== 'export') {
-      var liItem = document.createElement('li');
-      liItem.id = 'export';
-      liItem.className = 'ng-star-inserted';
-      liItem.style = 'display: inline-block; vertical-align: middle;';
+    if (!navBar || !navBar.children) return;
+    if (Array.from(navBar.children).some((element) => element.id === 'export')) return;
 
-      var exportButton = document.createElement('button');
-      exportButton.textContent = '下载周志';
+    var liItem = document.createElement('li');
+    liItem.id = 'export';
+    liItem.className = 'ng-star-inserted';
+    liItem.style = 'display: inline-block; vertical-align: middle;';
+
+    var exportButton = document.createElement('button');
+    exportButton.textContent = '下载周志';
+    exportButton.style.backgroundColor = 'transparent';
+    exportButton.style.color = 'white';
+    exportButton.style.border = 'none';
+    exportButton.style.textAlign = 'center';
+    exportButton.style.textDecoration = 'none';
+    exportButton.style.display = 'inline-block';
+    exportButton.style.fontSize = '14px';
+    exportButton.style.cursor = 'pointer';
+
+    exportButton.onmouseover = function () {
+      exportButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
+    };
+    exportButton.onmouseout = function () {
       exportButton.style.backgroundColor = 'transparent';
-      exportButton.style.color = 'white';
-      exportButton.style.border = 'none';
-      exportButton.style.textAlign = 'center';
-      exportButton.style.textDecoration = 'none';
-      exportButton.style.display = 'inline-block';
-      exportButton.style.fontSize = '14px';
-      exportButton.style.cursor = 'pointer';
+    };
 
-      exportButton.onmouseover = function () {
-        exportButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
-      };
-      exportButton.onmouseout = function () {
-        exportButton.style.backgroundColor = 'transparent';
-      };
+    exportButton.onclick = exportWeeklyLogs;
 
-      exportButton.onclick = exportWeeklyLogs;
-
-      liItem.appendChild(exportButton);
-      navBar.insertBefore(liItem, navBar.firstChild);
-    }
+    liItem.appendChild(exportButton);
+    navBar.insertBefore(liItem, navBar.firstChild);
   }
 
   async function exportWeeklyLogs() {
@@ -462,7 +466,133 @@
     return request({ url: logContentUrl, data });
   }
 
+  /** =================================== 配置信息 ============================================ */
+
+  /** 添加设置按钮 */
+  function addSettingBtn() {
+    var navBar = document.querySelector('#top-global');
+    if (!navBar || !navBar.children) return;
+    if (Array.from(navBar.children).some((element) => element.id === 'setting')) return;
+
+    var liItem = document.createElement('li');
+    liItem.id = 'setting';
+    liItem.className = 'ng-star-inserted';
+    liItem.style = 'display: inline-block; vertical-align: middle;';
+
+    var settingButton = document.createElement('button');
+    settingButton.textContent = '设置';
+    settingButton.style.backgroundColor = 'transparent';
+    settingButton.style.color = 'white';
+    settingButton.style.border = 'none';
+    settingButton.style.textAlign = 'center';
+    settingButton.style.textDecoration = 'none';
+    settingButton.style.display = 'inline-block';
+    settingButton.style.fontSize = '14px';
+    settingButton.style.cursor = 'pointer';
+
+    settingButton.onmouseover = function () {
+      settingButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
+    };
+    settingButton.onmouseout = function () {
+      settingButton.style.backgroundColor = 'transparent';
+    };
+
+    settingButton.onclick = settings;
+
+    liItem.appendChild(settingButton);
+    navBar.insertBefore(liItem, navBar.firstChild);
+  }
+
+  /** AI 密钥 */
+  function settings() {
+    // 创建弹窗容器
+    const dialog = document.createElement('div');
+    dialog.style.position = 'fixed';
+    dialog.style.top = '50%';
+    dialog.style.left = '50%';
+    dialog.style.transform = 'translate(-50%, -50%)';
+    dialog.style.backgroundColor = 'white';
+    dialog.style.padding = '20px';
+    dialog.style.borderRadius = '4px';
+    dialog.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+    dialog.style.zIndex = '9999';
+
+    // 创建标题
+    const title = document.createElement('h2');
+    title.textContent = '设置';
+    title.style.marginTop = '0';
+    dialog.appendChild(title);
+
+    // 创建输入框
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '请输入 AI 密钥';
+    input.value = cozeAccessToken;
+    input.style.width = '300px';
+    input.style.padding = '8px';
+    input.style.marginBottom = '15px';
+    input.style.border = '1px solid #d9d9d9';
+    input.style.borderRadius = '4px';
+    dialog.appendChild(input);
+
+    // 创建按钮容器
+    const btnContainer = document.createElement('div');
+    btnContainer.style.textAlign = 'right';
+
+    // 创建取消按钮
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '取消';
+    cancelBtn.style.marginRight = '8px';
+    cancelBtn.style.padding = '4px 15px';
+    cancelBtn.style.backgroundColor = '#f0f0f0';
+    cancelBtn.style.border = 'none';
+    cancelBtn.style.borderRadius = '4px';
+    cancelBtn.style.cursor = 'pointer';
+    cancelBtn.onclick = () => {
+      document.body.removeChild(dialog);
+    };
+
+    // 创建确认按钮
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = '确认';
+    confirmBtn.style.padding = '4px 15px';
+    confirmBtn.style.backgroundColor = '#1890ff';
+    confirmBtn.style.color = 'white';
+    confirmBtn.style.border = 'none';
+    confirmBtn.style.borderRadius = '4px';
+    confirmBtn.style.cursor = 'pointer';
+    confirmBtn.onclick = () => {
+      document.body.removeChild(dialog);
+      // 保存配置
+      cozeAccessToken = input.value;
+      setConfig('cozeAccessToken', input.value);
+      toast('保存成功');
+    };
+
+    btnContainer.appendChild(cancelBtn);
+    btnContainer.appendChild(confirmBtn);
+    dialog.appendChild(btnContainer);
+
+    document.body.appendChild(dialog);
+  }
+
   /** =================================== 通用工具 ============================================ */
+
+  /** 获取配置 */
+  function getConfig(key) {
+    const config = GM_getValue('gdytw') || {};
+    if (key && key.length) return config[key];
+    return config;
+  }
+
+  /** 设置配置 */
+  function setConfig(key, value) {
+    const config = GM_getValue('gdytw') || {};
+    if (key && key.length) {
+      config[key] = value;
+    }
+    GM_setValue('gdytw', config);
+  }
 
   /** 获取授权 */
   function getAuthorization() {

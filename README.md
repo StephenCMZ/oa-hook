@@ -3,6 +3,7 @@
 ### 使用
 
 1. 浏览器安装[篡改猴](https://chromewebstore.google.com/detail/%E7%AF%A1%E6%94%B9%E7%8C%B4/dhdgffkkebhmkfjojejmpbldmpobfkfo)插件后，添加脚本。
+2. 点击导航栏"设置"按钮配置扣子 AI 密钥（可选，未配置无法使用 AI 功能）
 
 ### 功能
 
