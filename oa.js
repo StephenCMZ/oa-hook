@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         OA 系统
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/StephenCMZ/oa-hook.git
 // @version      0.1
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @downloadURL  https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
+// @updateURL    https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
 // ==/UserScript==
 
 (function () {
@@ -18,6 +20,13 @@
   const logDetailUrl = '/api/Workflow/FlowMan/GetDetail';
   const logContentUrl = '/api/Form/ExternalDataSource/GetDataList';
   const workFlowDetailUrl = '/api/Workflow/FlowMan/GetPrint';
+
+  // AI
+  const cozeChatUrl = 'https://api.coze.cn/v3/chat';
+  const cozeRetrieveUrl = 'https://api.coze.cn/v3/chat/retrieve';
+  const cozeMessageUrl = 'https://api.coze.cn/v3/chat/message/list';
+  const cozeAccessToken = '';
+  const cozeBotId = '7472312758722560039';
 
   const year = new Date().getFullYear().toString();
   const pageSize = 200;
@@ -249,12 +258,30 @@
         weekLogs += `${log.content}\n\n`;
       });
 
-      // TODO: AI 整理内容
+      if (!weekLogs) {
+        return toast('本周暂无无日志');
+      }
+
+      // AI 整理内容
+      if (cozeAccessToken && cozeAccessToken.length) {
+        try {
+          const aiLogDetails = await cozeChat(weekLogs);
+          if (aiLogDetails && aiLogDetails.length) {
+            weekLogs = aiLogDetails;
+          }
+        } catch (error) {
+          toast('AI整理周志失败，直接填充原始内容');
+          log('【AI整理内容失败】', error);
+        }
+      } else {
+        log('【本周工作总结】', '尚未配置 AI 密钥，直接填充原始内容');
+      }
 
       // 填充本周工作总结
       weekLogTextarea.value = weekLogs;
     } catch (error) {
       log('【本周工作总结】', '填充本周工作总结内容失败');
+      toast('填充本周工作总结内容失败');
     }
   }
 
@@ -264,7 +291,6 @@
       pageSize: 7,
       sort: 'CreateTime-desc',
       filter: `(TaskName~contains~'日计划'~and~(CreateTime~gte~datetime'${getMonday()}T00-00-00'~and~CreateTime~lte~datetime'${getSunday()}T23-59-59'))`,
-      // filter: `(TaskName~contains~'日计划'~and~(CreateTime~gte~datetime'2025-02-10T00-00-00'~and~CreateTime~lte~datetime'2025-02-16T23-59-59'))`, // for test
       filterMode: 0,
     };
     return request({ url: logListUrl, data });
@@ -468,7 +494,7 @@
   }
 
   /** 主动请求 */
-  function request({ url, data, method = 'POST' }) {
+  function request({ url, data, method = 'POST', headers }) {
     return new Promise(async (resolve, reject) => {
       if (method !== 'POST' && method !== 'GET') {
         return reject('请求方法错误');
@@ -485,11 +511,20 @@
 
       // 发起请求
       const xhr = new XMLHttpRequest();
+      if (url && !url.startsWith('http')) {
+        url = baseUrl + url;
+      }
+
       if (method === 'POST') {
-        xhr.open('POST', baseUrl + url, true);
-        xhr.setRequestHeader('Content-Type', 'application/json');
-        xhr.setRequestHeader('Authorization', 'Bearer ' + authorization);
-        data = JSON.stringify(data || {});
+        // POST
+        xhr.open('POST', url, true);
+        // header
+        if (!headers) {
+          headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authorization };
+        }
+        for (const key in headers) {
+          xhr.setRequestHeader(key, headers[key]);
+        }
         xhr.onreadystatechange = function () {
           if (xhr.readyState === 4 && xhr.status === 200) {
             const res = JSON.parse(xhr.responseText);
@@ -499,10 +534,11 @@
             reject(xhr.responseText);
           }
         };
-        xhr.send(data);
+        xhr.send(JSON.stringify(data || {}));
       } else {
+        // GET
         data = new URLSearchParams({ ...data, access_token: authorization });
-        xhr.open('GET', baseUrl + url + '?' + data, true);
+        xhr.open('GET', url + '?' + data, true);
         xhr.onreadystatechange = function () {
           if (xhr.readyState === 4 && xhr.status === 200) {
             resolve(xhr.responseText);
@@ -510,7 +546,157 @@
             reject(xhr.responseText);
           }
         };
-        xhr.send(data);
+        xhr.send();
+      }
+    });
+  }
+
+  /** 主动请求(跨域) */
+  function requestGM({ url, data, method = 'POST', headers }) {
+    return new Promise(async (resolve, reject) => {
+      if (method !== 'POST' && method !== 'GET') {
+        return reject('请求方法错误');
+      }
+
+      // 获取授权
+      if (!authorization || !authorization.length) {
+        const auth = await getAuthorization();
+        if (!auth || !auth.length) {
+          toast('获取授权失败');
+          reject('获取授权失败');
+        }
+      }
+
+      // 发起请求
+      GM_xmlhttpRequest({
+        method,
+        url,
+        headers,
+        data: JSON.stringify(data),
+        onload: function (response) {
+          if (response.status === 200) {
+            resolve(response.responseText);
+          } else {
+            reject(response.responseText);
+          }
+        },
+        onerror: function (error) {
+          reject(error);
+        },
+      });
+    });
+  }
+
+  /** 扣子对话 */
+  function cozeChat(message) {
+    return new Promise(async (resolve, reject) => {
+      if (!message || !message.length) {
+        return reject('消息不能为空');
+      }
+
+      try {
+        // 获取 OA 授权, 作为 cozeUserId
+        if (!authorization || !authorization.length) {
+          const auth = await getAuthorization();
+          if (!auth || !auth.length) {
+            toast('获取授权失败');
+            reject('获取授权失败');
+          }
+        }
+
+        // 发起对话
+        const enterMessage = {
+          role: 'user',
+          content: message,
+          content_type: 'text',
+        };
+        let chatRes = await requestGM({
+          url: cozeChatUrl,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + cozeAccessToken,
+          },
+          data: {
+            bot_id: cozeBotId,
+            user_id: authorization,
+            additional_messages: [enterMessage],
+          },
+        });
+        log('【AI发起对话】', chatRes);
+        chatRes = JSON.parse(chatRes);
+
+        // 请求失败
+        if (chatRes.code !== 0) {
+          return reject(chatRes);
+        }
+
+        // 查询结果
+        const chatResponse = await cozeChatResponse(chatRes.data);
+        if (!chatResponse.data || !chatResponse.data.length) {
+          return reject('对话失败');
+        }
+
+        // 解析结果
+        const chatContent = chatResponse.data.find((item) => item.role === 'assistant' && item.type === 'answer');
+        let content = (chatContent.content || '').replaceAll('### ', '');
+
+        resolve(content);
+      } catch (error) {
+        log('【AI发起对话失败】', error);
+        reject(error);
+      }
+    });
+  }
+
+  /** 扣子对话结果查询 */
+  function cozeChatResponse(chat) {
+    return new Promise(async (resolve, reject) => {
+      if (!chat || !chat.id || !chat.conversation_id) {
+        return reject('对话不能为空');
+      }
+      const { id, conversation_id } = chat;
+
+      const poll = () => {
+        return requestGM({
+          url: `${cozeRetrieveUrl}?conversation_id=${conversation_id}&chat_id=${id}`,
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + cozeAccessToken,
+          },
+        });
+      };
+
+      try {
+        // 轮询对话状态
+        let chatRes = await poll();
+        log('【AI轮询对话状态】', chatRes);
+        chatRes = JSON.parse(chatRes);
+        while (chatRes.data.status !== 'completed') {
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // 每1秒轮询一次
+          chatRes = await poll();
+          log('【AI轮询对话状态】', chatRes);
+          chatRes = JSON.parse(chatRes);
+        }
+
+        // 查询结果
+        let chatMessageRes = await requestGM({
+          url: `${cozeMessageUrl}?conversation_id=${conversation_id}&chat_id=${id}`,
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + cozeAccessToken,
+          },
+        });
+        log('【AI查询对话结果】', chatMessageRes);
+        chatMessageRes = JSON.parse(chatMessageRes);
+        if (chatMessageRes.code !== 0) {
+          return reject(chatMessageRes);
+        }
+
+        resolve(chatMessageRes);
+      } catch (error) {
+        reject(error);
       }
     });
   }
