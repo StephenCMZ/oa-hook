@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.1
+// @version      0.2
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -289,11 +289,15 @@
   }
 
   function getWeekDailyLogList() {
+    let startDate = getConfig('weekDailyLogStartDate') || '';
+    let endDate = getConfig('weekDailyLogEndDate') || '';
+    if (!startDate.length || !isDateValid(startDate)) startDate = getMonday();
+    if (!endDate.length || !isDateValid(endDate)) endDate = getSunday();
     const data = {
       page: 1,
-      pageSize: 7,
+      pageSize: 20,
       sort: 'CreateTime-desc',
-      filter: `(TaskName~contains~'日计划'~and~(CreateTime~gte~datetime'${getMonday()}T00-00-00'~and~CreateTime~lte~datetime'${getSunday()}T23-59-59'))`,
+      filter: `(TaskName~contains~'日计划'~and~(CreateTime~gte~datetime'${startDate}T00-00-00'~and~CreateTime~lte~datetime'${endDate}T23-59-59'))`,
       filterMode: 0,
     };
     return request({ url: logListUrl, data });
@@ -315,6 +319,12 @@
     const diff = today.getDate() + (7 - dayOfWeek);
     today.setDate(diff);
     return today.toISOString().split('T')[0];
+  }
+
+  // 判断是否为日期格式 YYYY-MM-DD
+  function isDateValid(dateString) {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    return regex.test(dateString);
   }
 
   /** =================================== 导出全年周志 ============================================ */
@@ -503,7 +513,7 @@
     navBar.insertBefore(liItem, navBar.firstChild);
   }
 
-  /** AI 密钥 */
+  /** 设置弹窗 */
   function settings() {
     // 创建弹窗容器
     const dialog = document.createElement('div');
@@ -517,23 +527,53 @@
     dialog.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
     dialog.style.zIndex = '9999';
 
-    // 创建标题
+    // 创建弹窗标题
     const title = document.createElement('h2');
     title.textContent = '设置';
     title.style.marginTop = '0';
     dialog.appendChild(title);
 
-    // 创建输入框
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = '请输入 AI 密钥';
-    input.value = cozeAccessToken;
-    input.style.width = '300px';
-    input.style.padding = '8px';
-    input.style.marginBottom = '15px';
-    input.style.border = '1px solid #d9d9d9';
-    input.style.borderRadius = '4px';
-    dialog.appendChild(input);
+    // 创建输入框容器
+    const inputContainer = document.createElement('div');
+    inputContainer.style.display = 'flex';
+    inputContainer.style.flexDirection = 'column';
+    inputContainer.style.gap = '15px';
+    inputContainer.style.marginBottom = '20px';
+
+    // 创建 AI 密钥输入框
+    const aiKeyInput = document.createElement('input');
+    aiKeyInput.type = 'text';
+    aiKeyInput.placeholder = '请输入 AI 密钥';
+    aiKeyInput.value = cozeAccessToken;
+    aiKeyInput.style.width = '400px';
+    aiKeyInput.style.padding = '8px';
+    aiKeyInput.style.border = '1px solid #d9d9d9';
+    aiKeyInput.style.borderRadius = '4px';
+    inputContainer.appendChild(aiKeyInput);
+
+    // 创建周志开始时间输入框
+    const weekDailyLogStartDateInput = document.createElement('input');
+    weekDailyLogStartDateInput.type = 'text';
+    weekDailyLogStartDateInput.placeholder = '周志开始时间格式为 YYYY-MM-DD, 不填默认本周一';
+    weekDailyLogStartDateInput.value = getConfig('weekDailyLogStartDate') || '';
+    weekDailyLogStartDateInput.style.width = '400px';
+    weekDailyLogStartDateInput.style.padding = '8px';
+    weekDailyLogStartDateInput.style.border = '1px solid #d9d9d9';
+    weekDailyLogStartDateInput.style.borderRadius = '4px';
+    inputContainer.appendChild(weekDailyLogStartDateInput);
+
+    // 创建周志结束时间输入框
+    const weekDailyLogEndDateInput = document.createElement('input');
+    weekDailyLogEndDateInput.type = 'text';
+    weekDailyLogEndDateInput.placeholder = '周志结束时间格式为 YYYY-MM-DD, 不填默认本周日';
+    weekDailyLogEndDateInput.value = getConfig('weekDailyLogEndDate') || '';
+    weekDailyLogEndDateInput.style.width = '400px';
+    weekDailyLogEndDateInput.style.padding = '8px';
+    weekDailyLogEndDateInput.style.border = '1px solid #d9d9d9';
+    weekDailyLogEndDateInput.style.borderRadius = '4px';
+    inputContainer.appendChild(weekDailyLogEndDateInput);
+
+    dialog.appendChild(inputContainer);
 
     // 创建按钮容器
     const btnContainer = document.createElement('div');
@@ -562,10 +602,28 @@
     confirmBtn.style.borderRadius = '4px';
     confirmBtn.style.cursor = 'pointer';
     confirmBtn.onclick = () => {
+      // 保存 AI 密钥配置
+      cozeAccessToken = aiKeyInput.value;
+      setConfig('cozeAccessToken', aiKeyInput.value);
+
+      // 保存周志开始时间
+      const weekDailyLogStartDate = weekDailyLogStartDateInput.value || '';
+      if (weekDailyLogStartDate.length && !isDateValid(weekDailyLogStartDate)) {
+        toast('周志开始时间格式异常');
+        return;
+      }
+      setConfig('weekDailyLogStartDate', weekDailyLogStartDate);
+
+      // 保存周志结束时间
+      const weekDailyLogEndDate = weekDailyLogEndDateInput.value || '';
+      if (weekDailyLogEndDate.length && !isDateValid(weekDailyLogEndDate)) {
+        toast('周志结束时间格式异常');
+        return;
+      }
+      setConfig('weekDailyLogEndDate', weekDailyLogEndDate);
+
+      // 关闭弹窗
       document.body.removeChild(dialog);
-      // 保存配置
-      cozeAccessToken = input.value;
-      setConfig('cozeAccessToken', input.value);
       toast('保存成功');
     };
 
