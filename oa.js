@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.2
+// @version      0.3
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -30,7 +30,7 @@
   let cozeAccessToken = getConfig('cozeAccessToken') || '';
   const cozeBotId = '7472312758722560039';
 
-  const year = new Date().getFullYear().toString();
+  let weekDailyLogYear = '';
   const pageSize = 200;
   let authorization = '';
   let userName = '';
@@ -327,6 +327,12 @@
     return regex.test(dateString);
   }
 
+  // 判断是否为年份格式 YYYY
+  function isYearValid(yearString) {
+    const regex = /^\d{4}$/;
+    return regex.test(yearString);
+  }
+
   /** =================================== 导出全年周志 ============================================ */
 
   /** 导航栏添加 下载周志 按钮 */
@@ -421,6 +427,11 @@
 
   /** 获取全年周计划列表 */
   function getWeeklyLogList() {
+    let year = getConfig('weekDailyLogYear') || '';
+    if (!year.length || !isYearValid(year)) {
+      year = new Date().getFullYear().toString();
+    }
+    weekDailyLogYear = year;
     const data = {
       page: 1,
       pageSize: pageSize,
@@ -554,7 +565,7 @@
     // 创建周志开始时间输入框
     const weekDailyLogStartDateInput = document.createElement('input');
     weekDailyLogStartDateInput.type = 'text';
-    weekDailyLogStartDateInput.placeholder = '周志开始时间格式为 YYYY-MM-DD, 不填默认本周一';
+    weekDailyLogStartDateInput.placeholder = '自动填充周志开始时间格式为 YYYY-MM-DD, 不填默认本周一';
     weekDailyLogStartDateInput.value = getConfig('weekDailyLogStartDate') || '';
     weekDailyLogStartDateInput.style.width = '400px';
     weekDailyLogStartDateInput.style.padding = '8px';
@@ -565,13 +576,24 @@
     // 创建周志结束时间输入框
     const weekDailyLogEndDateInput = document.createElement('input');
     weekDailyLogEndDateInput.type = 'text';
-    weekDailyLogEndDateInput.placeholder = '周志结束时间格式为 YYYY-MM-DD, 不填默认本周日';
+    weekDailyLogEndDateInput.placeholder = '自动填充周志结束时间格式为 YYYY-MM-DD, 不填默认本周日';
     weekDailyLogEndDateInput.value = getConfig('weekDailyLogEndDate') || '';
     weekDailyLogEndDateInput.style.width = '400px';
     weekDailyLogEndDateInput.style.padding = '8px';
     weekDailyLogEndDateInput.style.border = '1px solid #d9d9d9';
     weekDailyLogEndDateInput.style.borderRadius = '4px';
     inputContainer.appendChild(weekDailyLogEndDateInput);
+
+    // 创建下载周志年份输入框
+    const weekDailyLogYearInput = document.createElement('input');
+    weekDailyLogYearInput.type = 'text';
+    weekDailyLogYearInput.placeholder = '下载周志年份格式为 YYYY, 不填默认当前年份';
+    weekDailyLogYearInput.value = getConfig('weekDailyLogYear') || '';
+    weekDailyLogYearInput.style.width = '400px';
+    weekDailyLogYearInput.style.padding = '8px';
+    weekDailyLogYearInput.style.border = '1px solid #d9d9d9';
+    weekDailyLogYearInput.style.borderRadius = '4px';
+    inputContainer.appendChild(weekDailyLogYearInput);
 
     dialog.appendChild(inputContainer);
 
@@ -621,6 +643,14 @@
         return;
       }
       setConfig('weekDailyLogEndDate', weekDailyLogEndDate);
+
+      // 保存下载周志年份
+      const weekDailyLogYear = weekDailyLogYearInput.value || '';
+      if (weekDailyLogYear.length && !isYearValid(weekDailyLogYear)) {
+        toast('周志年份格式异常');
+        return;
+      }
+      setConfig('weekDailyLogYear', weekDailyLogYear);
 
       // 关闭弹窗
       document.body.removeChild(dialog);
@@ -919,7 +949,7 @@
     // 创建下载链接
     const downloadLink = document.createElement('a');
     downloadLink.href = URL.createObjectURL(blob);
-    downloadLink.download = `${userName}_周报_${new Date().toLocaleDateString()}.md`;
+    downloadLink.download = `${userName}_周报_${weekDailyLogYear}_${new Date().toLocaleDateString()}.md`;
 
     // 触发下载
     document.body.appendChild(downloadLink);
