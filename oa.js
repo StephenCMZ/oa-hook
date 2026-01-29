@@ -46,7 +46,6 @@
 
   /** 初始化 */
   function init() {
-    updateStatisticsInfo();
     hookShortMenu();
     window.addEventListener('load', function () {
       setTimeout(addSettingBtn, 1000);
@@ -613,7 +612,7 @@
 
     const statisticsSwitch = document.createElement('input');
     statisticsSwitch.type = 'checkbox';
-    statisticsSwitch.checked = getConfig('showStatisticsInfo') === null ? true : getConfig('showStatisticsInfo');
+    statisticsSwitch.checked = getConfig('showStatisticsInfo');
     statisticsSwitch.style.marginLeft = '8px';
     statisticsSwitchElement.appendChild(statisticsSwitch);
     inputContainer.appendChild(statisticsSwitchElement);
@@ -692,76 +691,80 @@
 
   /** =================================== 统计信息 ============================================ */
 
-  async function updateStatisticsInfo() {
-    if (!getConfig('showStatisticsInfo')) return;
+  function updateStatisticsInfo() {
+    return new Promise(async (resolve) => {
+      if (!getConfig('showStatisticsInfo')) return;
 
-    // 今日日期
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const weekDay = ['日', '一', '二', '三', '四', '五', '六'][today.getDay()];
-    const todayDate = `${year}年${month}月${day}日 周${weekDay}`;
-    statistics.todayDate = todayDate;
+      // 今日日期
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const weekDay = ['日', '一', '二', '三', '四', '五', '六'][today.getDay()];
+      const todayDate = `${year}年${month}月${day}日 周${weekDay}`;
+      statistics.todayDate = todayDate;
 
-    // 距离周末
-    if (weekDay !== '六' && weekDay !== '日') {
-      const saturday = new Date(`${year}-${month}-${day}`);
-      saturday.setDate(saturday.getDate() + (6 - saturday.getDay()));
-      const diffDaysToWeekend = calculateDateDiff(new Date(`${year}-${month}-${day}`), saturday);
-      statistics.diffDaysToWeekend = diffDaysToWeekend;
-    } else {
-      statistics.diffDaysToWeekend = 0;
-    }
-
-    // 距离发工资天数，每月5号发工资
-    const payDay = '05';
-    if (day !== payDay && '0' + day !== payDay) {
-      const nextPayDate = new Date(`${year}-${month}-${payDay}`);
-      if (nextPayDate < today) {
-        nextPayDate.setMonth(nextPayDate.getMonth() + 1);
-      }
-      const diffDaysToPay = calculateDateDiff(new Date(`${year}-${month}-${day}`), nextPayDate);
-      statistics.diffDaysToPay = diffDaysToPay;
-    } else {
-      statistics.diffDaysToPay = 0;
-    }
-
-    // 获取请假信息
-    try {
-      const userVacationRes = await request({
-        url: userVacationUrl,
-        data: {
-          page: 1,
-          pageSize: 10,
-          isUsableDays: false,
-          startDate: `${year}-01-01 00:00:00`,
-          endDate: `${year}-12-31 23:59:59`,
-        },
-      });
-      const userVacations = ((userVacationRes || {}).Data || {}).Data || [];
-      if (userVacations.length) {
-        statistics.vacations = formVacations(userVacations[0] || {});
+      // 距离周末
+      if (weekDay !== '六' && weekDay !== '日') {
+        const saturday = new Date(`${year}-${month}-${day}`);
+        saturday.setDate(saturday.getDate() + (6 - saturday.getDay()));
+        const diffDaysToWeekend = calculateDateDiff(new Date(`${year}-${month}-${day}`), saturday);
+        statistics.diffDaysToWeekend = diffDaysToWeekend;
       } else {
-        statistics.vacations = [];
+        statistics.diffDaysToWeekend = 0;
       }
-    } catch (error) {}
 
-    // 获取法定节假日
-    try {
-      const holidayRes = await requestGM({ url: holidayUrl, method: 'GET' });
-      let holidays = JSON.parse(holidayRes || '{}').holidays || {};
+      // 距离发工资天数，每月5号发工资
+      const payDay = '05';
+      if (day !== payDay && '0' + day !== payDay) {
+        const nextPayDate = new Date(`${year}-${month}-${payDay}`);
+        if (nextPayDate < today) {
+          nextPayDate.setMonth(nextPayDate.getMonth() + 1);
+        }
+        const diffDaysToPay = calculateDateDiff(new Date(`${year}-${month}-${day}`), nextPayDate);
+        statistics.diffDaysToPay = diffDaysToPay;
+      } else {
+        statistics.diffDaysToPay = 0;
+      }
 
-      // 处理节假日数据
-      holidays = Object.keys(holidays)
-        .filter((key) => key.startsWith(`${year}-`)) // 过滤出当前年份的节假日
-        .filter((key) => new Date(key) >= new Date(`${year}-${month}-${day}`)) // 过滤出过期的节假日
-        .map((key) => ({ date: key, name: (holidays[key].split(',') || [])[1] || '' })) // 映射为 { date: 日期, name: 节假日名称 } 格式
-        .filter((item, index, arr) => arr.findIndex((i) => i.name === item.name) === index) // 过滤重复节假日名称
-        .map((item) => ({ ...item, diffDays: calculateDateDiff(new Date(item.date)) })); // 计算日期相差天数
+      // 获取请假信息
+      try {
+        const userVacationRes = await request({
+          url: userVacationUrl,
+          data: {
+            page: 1,
+            pageSize: 10,
+            isUsableDays: false,
+            startDate: `${year}-01-01 00:00:00`,
+            endDate: `${year}-12-31 23:59:59`,
+          },
+        });
+        const userVacations = ((userVacationRes || {}).Data || {}).Data || [];
+        if (userVacations.length) {
+          statistics.vacations = formVacations(userVacations[0] || {});
+        } else {
+          statistics.vacations = [];
+        }
+      } catch (error) {}
 
-      statistics.holidays = holidays || [];
-    } catch (error) {}
+      // 获取法定节假日
+      try {
+        const holidayRes = await requestGM({ url: holidayUrl, method: 'GET' });
+        let holidays = JSON.parse(holidayRes || '{}').holidays || {};
+
+        // 处理节假日数据
+        holidays = Object.keys(holidays)
+          .filter((key) => key.startsWith(`${year}-`)) // 过滤出当前年份的节假日
+          .filter((key) => new Date(key) >= new Date(`${year}-${month}-${day}`)) // 过滤出过期的节假日
+          .map((key) => ({ date: key, name: (holidays[key].split(',') || [])[1] || '' })) // 映射为 { date: 日期, name: 节假日名称 } 格式
+          .filter((item, index, arr) => arr.findIndex((i) => i.name === item.name) === index) // 过滤重复节假日名称
+          .map((item) => ({ ...item, diffDays: calculateDateDiff(new Date(item.date)) })); // 计算日期相差天数
+
+        statistics.holidays = holidays || [];
+      } catch (error) {}
+
+      resolve();
+    });
   }
 
   function formVacations(userVacation = {}) {
@@ -801,8 +804,10 @@
     return diffDays;
   }
 
-  function addStatisticsInfo() {
+  async function addStatisticsInfo() {
     if (!getConfig('showStatisticsInfo')) return;
+
+    await updateStatisticsInfo();
 
     var navBar = document.querySelector('#top-global');
     if (!navBar || !navBar.children) return;
