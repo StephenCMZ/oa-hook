@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.3
+// @version      0.4
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -22,6 +22,11 @@
   const logDetailUrl = '/api/Workflow/FlowMan/GetDetail';
   const logContentUrl = '/api/Form/ExternalDataSource/GetDataList';
   const workFlowDetailUrl = '/api/Workflow/FlowMan/GetPrint';
+  const userVacationUrl = '/api/Attendance/UserVacation/GetPage';
+  const holidayUrl = 'https://cdn.jsdelivr.net/npm/chinese-days/dist/chinese-days.json';
+
+  // 统计信息
+  let statistics = {};
 
   // AI
   const cozeChatUrl = 'https://api.coze.cn/v3/chat';
@@ -41,10 +46,12 @@
 
   /** 初始化 */
   function init() {
+    updateStatisticsInfo();
     hookShortMenu();
     window.addEventListener('load', function () {
       setTimeout(addSettingBtn, 1000);
       setTimeout(addExportBtn, 1000);
+      setTimeout(addStatisticsInfo, 1000);
       setTimeout(autoFillFormPlan, loadFormTimes);
       setTimeout(autoFillFormWeekLog, loadFormTimes);
     });
@@ -595,6 +602,22 @@
     weekDailyLogYearInput.style.borderRadius = '4px';
     inputContainer.appendChild(weekDailyLogYearInput);
 
+    // 创建统计信息开关
+    const statisticsSwitchElement = document.createElement('div');
+    statisticsSwitchElement.style.display = 'flex';
+    statisticsSwitchElement.style.alignItems = 'center';
+
+    const statisticsSwitchLabel = document.createElement('label');
+    statisticsSwitchLabel.textContent = '显示统计信息';
+    statisticsSwitchElement.appendChild(statisticsSwitchLabel);
+
+    const statisticsSwitch = document.createElement('input');
+    statisticsSwitch.type = 'checkbox';
+    statisticsSwitch.checked = getConfig('showStatisticsInfo') === null ? true : getConfig('showStatisticsInfo');
+    statisticsSwitch.style.marginLeft = '8px';
+    statisticsSwitchElement.appendChild(statisticsSwitch);
+    inputContainer.appendChild(statisticsSwitchElement);
+
     dialog.appendChild(inputContainer);
 
     // 创建按钮容器
@@ -652,6 +675,9 @@
       }
       setConfig('weekDailyLogYear', weekDailyLogYear);
 
+      // 保存统计信息开关状态
+      setConfig('showStatisticsInfo', statisticsSwitch.checked);
+
       // 关闭弹窗
       document.body.removeChild(dialog);
       toast('保存成功');
@@ -662,6 +688,222 @@
     dialog.appendChild(btnContainer);
 
     document.body.appendChild(dialog);
+  }
+
+  /** =================================== 统计信息 ============================================ */
+
+  async function updateStatisticsInfo() {
+    if (!getConfig('showStatisticsInfo')) return;
+
+    // 今日日期
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const weekDay = ['日', '一', '二', '三', '四', '五', '六'][today.getDay()];
+    const todayDate = `${year}年${month}月${day}日 周${weekDay}`;
+    statistics.todayDate = todayDate;
+
+    // 距离周末
+    if (weekDay !== '六' && weekDay !== '日') {
+      const saturday = new Date(`${year}-${month}-${day}`);
+      saturday.setDate(saturday.getDate() + (6 - saturday.getDay()));
+      const diffDaysToWeekend = calculateDateDiff(new Date(`${year}-${month}-${day}`), saturday);
+      statistics.diffDaysToWeekend = diffDaysToWeekend;
+    } else {
+      statistics.diffDaysToWeekend = 0;
+    }
+
+    // 距离发工资天数，每月5号发工资
+    const payDay = '05';
+    if (day !== payDay && '0' + day !== payDay) {
+      const nextPayDate = new Date(`${year}-${month}-${payDay}`);
+      if (nextPayDate < today) {
+        nextPayDate.setMonth(nextPayDate.getMonth() + 1);
+      }
+      const diffDaysToPay = calculateDateDiff(new Date(`${year}-${month}-${day}`), nextPayDate);
+      statistics.diffDaysToPay = diffDaysToPay;
+    } else {
+      statistics.diffDaysToPay = 0;
+    }
+
+    // 获取请假信息
+    try {
+      const userVacationRes = await request({
+        url: userVacationUrl,
+        data: {
+          page: 1,
+          pageSize: 10,
+          isUsableDays: false,
+          startDate: `${year}-01-01 00:00:00`,
+          endDate: `${year}-12-31 23:59:59`,
+        },
+      });
+      const userVacations = ((userVacationRes || {}).Data || {}).Data || [];
+      if (userVacations.length) {
+        statistics.vacations = formVacations(userVacations[0] || {});
+      } else {
+        statistics.vacations = [];
+      }
+    } catch (error) {}
+
+    // 获取法定节假日
+    try {
+      const holidayRes = await requestGM({ url: holidayUrl, method: 'GET' });
+      let holidays = JSON.parse(holidayRes || '{}').holidays || {};
+
+      // 处理节假日数据
+      holidays = Object.keys(holidays)
+        .filter((key) => key.startsWith(`${year}-`)) // 过滤出当前年份的节假日
+        .filter((key) => new Date(key) >= new Date(`${year}-${month}-${day}`)) // 过滤出过期的节假日
+        .map((key) => ({ date: key, name: (holidays[key].split(',') || [])[1] || '' })) // 映射为 { date: 日期, name: 节假日名称 } 格式
+        .filter((item, index, arr) => arr.findIndex((i) => i.name === item.name) === index) // 过滤重复节假日名称
+        .map((item) => ({ ...item, diffDays: calculateDateDiff(new Date(item.date)) })); // 计算日期相差天数
+
+      statistics.holidays = holidays || [];
+    } catch (error) {}
+  }
+
+  function formVacations(userVacation = {}) {
+    if (!userVacation || !Object.keys(userVacation).length) {
+      return {};
+    }
+    const vacations = [];
+
+    const annual = formVacationByKey(userVacation, '1');
+    vacations.push({ key: 'annual', name: '剩余年假', value: annual.total - annual.used });
+    vacations.push({ key: 'annual-used', name: '已休年假', value: annual.used });
+    vacations.push({ key: 'personal-used', name: '已请事假', value: formVacationByKey(userVacation, '4').used });
+    vacations.push({ key: 'sick-used', name: '已请病假', value: formVacationByKey(userVacation, '3').used });
+    vacations.push({ key: 'marriage-used', name: '已请婚假', value: formVacationByKey(userVacation, '6').used });
+    vacations.push({ key: 'maternity-used', name: '已请产假', value: formVacationByKey(userVacation, '8').used });
+    vacations.push({ key: 'paternity-used', name: '已请陪产假', value: formVacationByKey(userVacation, '7').used });
+    vacations.push({ key: 'funeral-used', name: '已请丧假', value: formVacationByKey(userVacation, '9').used });
+    vacations.push({ key: 'breastfeeding-used', name: '已请哺乳假', value: formVacationByKey(userVacation, '2').used });
+    vacations.push({ key: 'injury-used', name: '已请工伤假', value: formVacationByKey(userVacation, '14').used });
+
+    return vacations;
+  }
+
+  function formVacationByKey(userVacation = {}, key = '') {
+    if (!userVacation || !Object.keys(userVacation).length || !key || !key.length) {
+      return { total: 0, used: 0, key: key };
+    }
+    const vacation = (userVacation[key] || '').trim();
+    const [used, total] = vacation.split('/') || [];
+    return { total: eval(!total || total === '-' ? 0 : total), used: eval(!used || used === '-' ? 0 : used), key: key };
+  }
+
+  // 计算日期相差天数
+  function calculateDateDiff(date1, date2 = new Date()) {
+    const diffTime = Math.abs(date2 - date1);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  }
+
+  function addStatisticsInfo() {
+    if (!getConfig('showStatisticsInfo')) return;
+
+    var navBar = document.querySelector('#top-global');
+    if (!navBar || !navBar.children) return;
+    if (Array.from(navBar.children).some((element) => element.id === 'statistics-info')) return;
+
+    var liItem = document.createElement('li');
+    liItem.id = 'statistics-info';
+    liItem.className = 'ng-star-inserted';
+    liItem.style = 'display: inline-block; vertical-align: middle;';
+
+    let statisticsInfo = '';
+    statisticsInfo += `距离发工资：${statistics.diffDaysToPay} 天`;
+    statisticsInfo += `\n距离周末：${statistics.diffDaysToWeekend} 天`;
+
+    if (statistics.holidays && statistics.holidays.length) {
+      statisticsInfo += `\n距离${statistics.holidays[0].name}：${statistics.holidays[0].diffDays} 天`;
+    }
+
+    const annual = (statistics.vacations || []).find((item) => item.key === 'annual').value || 0;
+    statisticsInfo += `\n剩余年假：${annual} 天`;
+
+    var statisticsButton = document.createElement('div');
+    statisticsButton.textContent = statisticsInfo;
+    statisticsButton.style.backgroundColor = 'transparent';
+    statisticsButton.style.color = 'white';
+    statisticsButton.style.border = 'none';
+    statisticsButton.style.textAlign = 'left';
+    statisticsButton.style.textDecoration = 'none';
+    statisticsButton.style.fontSize = '10px';
+    statisticsButton.style.cursor = 'pointer';
+    statisticsButton.style.whiteSpace = 'pre-wrap';
+    statisticsButton.style.lineHeight = 'normal';
+    statisticsButton.style.verticalAlign = 'center';
+    statisticsButton.style.padding = '0 8px';
+    statisticsButton.style.position = 'relative';
+
+    // 添加 hover
+    statisticsButton.style.transition = 'background-color 0.3s ease';
+    statisticsButton.addEventListener('mouseenter', () => {
+      statisticsButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+      showStatisticsDetailInfo(statisticsButton);
+    });
+    statisticsButton.addEventListener('mouseleave', () => {
+      statisticsButton.style.backgroundColor = 'transparent';
+      hideStatisticsDetailInfo(statisticsButton);
+    });
+
+    // 添加到导航栏
+    liItem.appendChild(statisticsButton);
+    navBar.appendChild(liItem);
+  }
+
+  function showStatisticsDetailInfo(statisticsButton) {
+    let detailInfo = `${statistics.todayDate}`;
+
+    detailInfo += `\n\n📅`;
+    detailInfo += `\n距离发工资：${statistics.diffDaysToPay} 天`;
+    detailInfo += `\n距离周末：${statistics.diffDaysToWeekend} 天`;
+
+    // 法定节假日
+    if (statistics.holidays && statistics.holidays.length) {
+      statistics.holidays.forEach((item) => {
+        detailInfo += `\n距离${item.name}：${item.diffDays} 天`;
+      });
+    }
+
+    // 休假
+    if (statistics.vacations && statistics.vacations.length) {
+      detailInfo += `\n\n♨️`;
+      statistics.vacations.forEach((item) => {
+        detailInfo += `\n${item.name}：${item.value} 天`;
+      });
+    }
+
+    // 显示统计信息详情
+    const statisticsDetailInfo = document.createElement('div');
+    statisticsDetailInfo.id = 'statistics-detail-info';
+    statisticsDetailInfo.textContent = detailInfo;
+    statisticsDetailInfo.style.display = 'inline-block';
+    statisticsDetailInfo.style.position = 'absolute';
+    statisticsDetailInfo.style.top = '110%';
+    statisticsDetailInfo.style.right = '0';
+    statisticsDetailInfo.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+    statisticsDetailInfo.style.color = 'white';
+    statisticsDetailInfo.style.padding = '8px';
+    statisticsDetailInfo.style.borderRadius = '4px';
+    statisticsDetailInfo.style.fontSize = '12px';
+    statisticsDetailInfo.style.whiteSpace = 'pre-wrap';
+    statisticsDetailInfo.style.lineHeight = 'normal';
+    statisticsDetailInfo.style.verticalAlign = 'center';
+    statisticsDetailInfo.style.zIndex = '1000';
+    statisticsDetailInfo.style.width = 'max-content';
+
+    statisticsButton.appendChild(statisticsDetailInfo);
+  }
+
+  function hideStatisticsDetailInfo(statisticsButton) {
+    const statisticsDetailInfo = statisticsButton.querySelector('#statistics-detail-info');
+    if (statisticsDetailInfo) {
+      statisticsButton.removeChild(statisticsDetailInfo);
+    }
   }
 
   /** =================================== 通用工具 ============================================ */
