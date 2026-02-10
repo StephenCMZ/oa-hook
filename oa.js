@@ -354,7 +354,7 @@
 
           if (toNodeName0 === '抄送' && toNodeName1 === '点评人') {
             // 抄送，默认选择关信东
-            const copyer = `{"TopLevelOrgId":"1","Id":"589376478202929152","Name":"关信东","DisplayName":"用户：关信东","Type":2,"TypeId":"User","TypeName":"用户","InSameNameOrg":"false","InLowerOrg":false,"Include":true,"Exclude":false,"RangeType":0,"RangeValue":"","IncludeCumDep":false,"LeaderType":0,"IsScope":false,"InDownOrg":false,"InUpOrg":false,"ExtendEnabled":false}`;
+            const copyer = `{"Id":"589376478202929152","Name":"关信东","Code":"7007","DepId":"325475396013277184","DepName":"综合事务部","DepFullName":"综合事务部","DepPath":"0325475396013277184","SortCode":"9999","AllowLogin":true,"Actived":true,"Pinyin":"GuanXinDong","InitialPinyin":"GXD","type":0}`;
             users[0] = {
               ...users[0],
               SelUsers: [JSON.parse(copyer)],
