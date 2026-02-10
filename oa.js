@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.4
+// @version      0.5
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -22,6 +22,7 @@
   const logDetailUrl = '/api/Workflow/FlowMan/GetDetail';
   const logContentUrl = '/api/Form/ExternalDataSource/GetDataList';
   const workFlowDetailUrl = '/api/Workflow/FlowMan/GetPrint';
+  const workFlowGetPreSelUsersUrl = '/api/Workflow/FlowMan/GetPreSelUsers';
   const userVacationUrl = '/api/Attendance/UserVacation/GetPage';
   const holidayUrl = 'https://cdn.jsdelivr.net/npm/chinese-days/dist/chinese-days.json';
 
@@ -46,13 +47,14 @@
 
   /** 初始化 */
   function init() {
-    hookShortMenu();
+    hookShortMenu(); // 新增周日报记录菜单
+    autoSelectReviewer(); // 自动选择日报/周报抄送人和点评人
     window.addEventListener('load', function () {
-      setTimeout(addSettingBtn, 1000);
-      setTimeout(addExportBtn, 1000);
-      setTimeout(addStatisticsInfo, 1000);
-      setTimeout(autoFillFormPlan, loadFormTimes);
-      setTimeout(autoFillFormWeekLog, loadFormTimes);
+      setTimeout(addSettingBtn, 1000); // 添加导航栏设置按钮
+      setTimeout(addExportBtn, 1000); // 添加导航栏导出按钮
+      setTimeout(addStatisticsInfo, 1000); // 添加导航栏统计信息
+      setTimeout(autoFillFormPlan, loadFormTimes); // 自动填充明日/下周工作计划
+      setTimeout(autoFillFormWeekLog, loadFormTimes); // 自动填充周报记录
     });
   }
 
@@ -337,6 +339,37 @@
   function isYearValid(yearString) {
     const regex = /^\d{4}$/;
     return regex.test(yearString);
+  }
+
+  /** =================================== 自动选择日报/周报抄送人和点评人 ============================================ */
+
+  function autoSelectReviewer() {
+    hookRequest({
+      url: workFlowGetPreSelUsersUrl,
+      fun: function (res) {
+        const users = res.Data.ForPreSelUsers;
+        if (users && users.length === 2) {
+          const toNodeName0 = (users[0] || {}).ToNodeName; // 抄送
+          const toNodeName1 = (users[1] || {}).ToNodeName; // 点评人
+
+          if (toNodeName0 === '抄送' && toNodeName1 === '点评人') {
+            // 抄送，默认选择关信东
+            const copyer = `{"TopLevelOrgId":"1","Id":"589376478202929152","Name":"关信东","DisplayName":"用户：关信东","Type":2,"TypeId":"User","TypeName":"用户","InSameNameOrg":"false","InLowerOrg":false,"Include":true,"Exclude":false,"RangeType":0,"RangeValue":"","IncludeCumDep":false,"LeaderType":0,"IsScope":false,"InDownOrg":false,"InUpOrg":false,"ExtendEnabled":false}`;
+            users[0] = {
+              ...users[0],
+              SelUsers: [JSON.parse(copyer)],
+            };
+            // 点评人，默认选择孔文威
+            const reviewer = `{"Name":"孔文威","Account":"2011","Code":"2011","Gender":true,"ContactVisibility":true,"Mobile":"18028196559","Cornet":null,"Telephone":null,"Email":"422963845@qq.com","WeChat":null,"SuperiorId":"0","Actived":true,"AllowLogin":true,"InitialPinyin":"KWW","Pinyin":"KongWenWei","IsOnline":false,"IsExternal":false,"ExtensionNumber":null,"AllowMobile":true,"InitialWubi":"BYD","AccountValidity":null,"Pin":null,"Creator":null,"CreatorId":"0","CreateTime":null,"UpdateUserName":"龙加鎏","UpdateUserId":"583962765559959552","UpdateTime":"2025-12-30T10:46:08.5518513","InactiveTime":null,"Department":{"Name":"软件信息部","Path":"0324796940434804736","FullName":"软件信息部","Actived":true,"SortCode":"0005","Categories":"","WeChatWorkDepId":59,"WeChatWorkCorpId":"ww41fa3fdd30318beb","Manning":0,"NoLimit":false,"ContactVisibility":true,"UserCount":0,"Id":"324796940434804736"},"Positions":[{"UserId":"583962756424765440","PositionId":"668027858240782336","Major":true,"Sequence":1,"SortCode":"999999","Position":{"JobId":"645577122982703104","OrganizeId":"324796940434804736","Name":"软件信息部/技术总监","Job":{"Name":"技术总监","SysBuildIn":false,"SortCode":999999,"Id":"645577122982703104"},"Id":"668027858240782336"},"Id":"583962757246849024"}],"Roles":[],"OrganizeRoles":[],"Password":null,"Superior":null,"RelationOrganizes":null,"UserCardExtra":null,"Id":"583962756424765440","Job":{"Name":"技术总监","SysBuildIn":false,"SortCode":999999,"Id":"645577122982703104"},"UserId":"583962756424765440","FormerName":null,"PostId":"5","Post":"技术岗","PostIdPath":["5"],"TitleId":null,"Title":null,"TitleConferingDate":null,"TitleGradeId":null,"TitleGrade":null,"Status":"在职","EmployeeCategory":null,"Birthday":"1986-02-18T00:00:00","IdentityCardNumber":"440682198602181036","PassportNumber":null,"Nationality":"中国","EthnicGroup":"汉族","NativePlace":"佛山","CurrentResidence":"广州市白云区京溪路云景花园新云桂苑16栋","RegistedResidence":null,"MaritalStatus":"未婚","PoliticalStatus":"群众","HighestDegree":"研究生","StartingDateOfFirstJob":"2009-03-01T00:00:00","EnterDate":"2017-02-06T00:00:00","ResignationDate":null,"RetirementDate":null,"Insurance":null,"InsuredDate":null,"AttendanceMachineId":null,"PostCategory":null,"BirthAddress":null,"JoinPartyDate":null,"ArchivesNumber":null,"StaffingCategory":null,"AccountUnitId":null,"AccountUnitName":null,"PersonnelModel":null,"OrgJobMid":null,"AvatarFileId":null,"IsLeader":null,"PersonnelContract":null,"DepartmentRecord":null,"ExtraFile":null,"EmployeeId":"583962756487680000","type":0}`;
+            users[1] = {
+              ...users[1],
+              SelUsers: [JSON.parse(reviewer)],
+            };
+          }
+        }
+        return res;
+      },
+    });
   }
 
   /** =================================== 导出全年周志 ============================================ */
