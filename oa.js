@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.5
+// @version      0.6
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -25,6 +25,11 @@
   const workFlowGetPreSelUsersUrl = '/api/Workflow/FlowMan/GetPreSelUsers';
   const userVacationUrl = '/api/Attendance/UserVacation/GetPage';
   const holidayUrl = 'https://cdn.jsdelivr.net/npm/chinese-days/dist/chinese-days.json';
+
+  // 组件 ID
+  const nav_setting_btn_id = 'setting_btn';
+  const nav_export_btn_id = 'export_btn';
+  const nav_statistics_info_id = 'statistics_info';
 
   // 统计信息
   let statistics = {};
@@ -50,12 +55,28 @@
     hookShortMenu(); // 新增周日报记录菜单
     autoSelectReviewer(); // 自动选择日报/周报抄送人和点评人
     window.addEventListener('load', function () {
-      setTimeout(addSettingBtn, 1000); // 添加导航栏设置按钮
-      setTimeout(addExportBtn, 1000); // 添加导航栏导出按钮
-      setTimeout(addStatisticsInfo, 1000); // 添加导航栏统计信息
+      guardAddElement(addSettingBtn); // 添加导航栏设置按钮
+      guardAddElement(addExportBtn); // 添加导航栏导出按钮
+      guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
       setTimeout(autoFillFormPlan, loadFormTimes); // 自动填充明日/下周工作计划
       setTimeout(autoFillFormWeekLog, loadFormTimes); // 自动填充周报记录
     });
+  }
+
+  /** 守卫添加元素 */
+  async function guardAddElement(addFun) {
+    if (!addFun) return;
+
+    // 仅进入管理页面后才添加元素
+    if (!isManagePage()) return;
+
+    // 已经添加过，直接返回
+    const isAdd = await addFun();
+    if (isAdd) return;
+
+    // 不存在，等待 100 毫秒，再次检查
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    guardAddElement(addFun);
   }
 
   /** =================================== 周日报记录 快捷按钮 ============================================ */
@@ -376,37 +397,40 @@
 
   /** 导航栏添加 下载周志 按钮 */
   function addExportBtn() {
-    var navBar = document.querySelector('#top-global');
-    if (!navBar || !navBar.children) return;
-    if (Array.from(navBar.children).some((element) => element.id === 'export')) return;
+    return new Promise((resolve) => {
+      var { navBar, exists } = hasNavBarItem(nav_export_btn_id);
+      if (!navBar || exists) return resolve(exists);
 
-    var liItem = document.createElement('li');
-    liItem.id = 'export';
-    liItem.className = 'ng-star-inserted';
-    liItem.style = 'display: inline-block; vertical-align: middle;';
+      var liItem = document.createElement('li');
+      liItem.id = nav_export_btn_id;
+      liItem.className = 'ng-star-inserted';
+      liItem.style = 'display: inline-block; vertical-align: middle;';
 
-    var exportButton = document.createElement('button');
-    exportButton.textContent = '下载周志';
-    exportButton.style.backgroundColor = 'transparent';
-    exportButton.style.color = 'white';
-    exportButton.style.border = 'none';
-    exportButton.style.textAlign = 'center';
-    exportButton.style.textDecoration = 'none';
-    exportButton.style.display = 'inline-block';
-    exportButton.style.fontSize = '14px';
-    exportButton.style.cursor = 'pointer';
-
-    exportButton.onmouseover = function () {
-      exportButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
-    };
-    exportButton.onmouseout = function () {
+      var exportButton = document.createElement('button');
+      exportButton.textContent = '下载周志';
       exportButton.style.backgroundColor = 'transparent';
-    };
+      exportButton.style.color = 'white';
+      exportButton.style.border = 'none';
+      exportButton.style.textAlign = 'center';
+      exportButton.style.textDecoration = 'none';
+      exportButton.style.display = 'inline-block';
+      exportButton.style.fontSize = '14px';
+      exportButton.style.cursor = 'pointer';
 
-    exportButton.onclick = exportWeeklyLogs;
+      exportButton.onmouseover = function () {
+        exportButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
+      };
+      exportButton.onmouseout = function () {
+        exportButton.style.backgroundColor = 'transparent';
+      };
 
-    liItem.appendChild(exportButton);
-    navBar.insertBefore(liItem, navBar.firstChild);
+      exportButton.onclick = exportWeeklyLogs;
+
+      liItem.appendChild(exportButton);
+      navBar.insertBefore(liItem, navBar.firstChild);
+
+      resolve(true);
+    });
   }
 
   async function exportWeeklyLogs() {
@@ -530,37 +554,40 @@
 
   /** 添加设置按钮 */
   function addSettingBtn() {
-    var navBar = document.querySelector('#top-global');
-    if (!navBar || !navBar.children) return;
-    if (Array.from(navBar.children).some((element) => element.id === 'setting')) return;
+    return new Promise((resolve) => {
+      var { navBar, exists } = hasNavBarItem(nav_setting_btn_id);
+      if (!navBar || exists) return resolve(exists);
 
-    var liItem = document.createElement('li');
-    liItem.id = 'setting';
-    liItem.className = 'ng-star-inserted';
-    liItem.style = 'display: inline-block; vertical-align: middle;';
+      var liItem = document.createElement('li');
+      liItem.id = nav_setting_btn_id;
+      liItem.className = 'ng-star-inserted';
+      liItem.style = 'display: inline-block; vertical-align: middle;';
 
-    var settingButton = document.createElement('button');
-    settingButton.textContent = '设置';
-    settingButton.style.backgroundColor = 'transparent';
-    settingButton.style.color = 'white';
-    settingButton.style.border = 'none';
-    settingButton.style.textAlign = 'center';
-    settingButton.style.textDecoration = 'none';
-    settingButton.style.display = 'inline-block';
-    settingButton.style.fontSize = '14px';
-    settingButton.style.cursor = 'pointer';
-
-    settingButton.onmouseover = function () {
-      settingButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
-    };
-    settingButton.onmouseout = function () {
+      var settingButton = document.createElement('button');
+      settingButton.textContent = '设置';
       settingButton.style.backgroundColor = 'transparent';
-    };
+      settingButton.style.color = 'white';
+      settingButton.style.border = 'none';
+      settingButton.style.textAlign = 'center';
+      settingButton.style.textDecoration = 'none';
+      settingButton.style.display = 'inline-block';
+      settingButton.style.fontSize = '14px';
+      settingButton.style.cursor = 'pointer';
 
-    settingButton.onclick = settings;
+      settingButton.onmouseover = function () {
+        settingButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
+      };
+      settingButton.onmouseout = function () {
+        settingButton.style.backgroundColor = 'transparent';
+      };
 
-    liItem.appendChild(settingButton);
-    navBar.insertBefore(liItem, navBar.firstChild);
+      settingButton.onclick = settings;
+
+      liItem.appendChild(settingButton);
+      navBar.insertBefore(liItem, navBar.firstChild);
+
+      resolve(true);
+    });
   }
 
   /** 设置弹窗 */
@@ -838,59 +865,63 @@
   }
 
   async function addStatisticsInfo() {
-    if (!getConfig('showStatisticsInfo')) return;
+    return new Promise(async (resolve) => {
+      // 不显示统计信息时，直接返回
+      if (!getConfig('showStatisticsInfo')) return resolve(true);
 
-    await updateStatisticsInfo();
+      var { navBar, exists } = hasNavBarItem(nav_statistics_info_id);
+      if (!navBar || exists) return resolve(exists);
 
-    var navBar = document.querySelector('#top-global');
-    if (!navBar || !navBar.children) return;
-    if (Array.from(navBar.children).some((element) => element.id === 'statistics-info')) return;
+      await updateStatisticsInfo();
 
-    var liItem = document.createElement('li');
-    liItem.id = 'statistics-info';
-    liItem.className = 'ng-star-inserted';
-    liItem.style = 'display: inline-block; vertical-align: middle;';
+      var liItem = document.createElement('li');
+      liItem.id = nav_statistics_info_id;
+      liItem.className = 'ng-star-inserted';
+      liItem.style = 'display: inline-block; vertical-align: middle;';
 
-    let statisticsInfo = '';
-    statisticsInfo += `距离发工资：${statistics.diffDaysToPay} 天`;
-    statisticsInfo += `\n距离周末：${statistics.diffDaysToWeekend} 天`;
+      let statisticsInfo = '';
+      statisticsInfo += `距离发工资：${statistics.diffDaysToPay} 天`;
+      statisticsInfo += `\n距离周末：${statistics.diffDaysToWeekend} 天`;
 
-    if (statistics.holidays && statistics.holidays.length) {
-      statisticsInfo += `\n距离${statistics.holidays[0].name}：${statistics.holidays[0].diffDays} 天`;
-    }
+      if (statistics.holidays && statistics.holidays.length) {
+        statisticsInfo += `\n距离${statistics.holidays[0].name}：${statistics.holidays[0].diffDays} 天`;
+      }
 
-    const annual = (statistics.vacations || []).find((item) => item.key === 'annual').value || 0;
-    statisticsInfo += `\n剩余年假：${annual} 天`;
+      const annual = (statistics.vacations || []).find((item) => item.key === 'annual').value || 0;
+      statisticsInfo += `\n剩余年假：${annual} 天`;
 
-    var statisticsButton = document.createElement('div');
-    statisticsButton.textContent = statisticsInfo;
-    statisticsButton.style.backgroundColor = 'transparent';
-    statisticsButton.style.color = 'white';
-    statisticsButton.style.border = 'none';
-    statisticsButton.style.textAlign = 'left';
-    statisticsButton.style.textDecoration = 'none';
-    statisticsButton.style.fontSize = '10px';
-    statisticsButton.style.cursor = 'pointer';
-    statisticsButton.style.whiteSpace = 'pre-wrap';
-    statisticsButton.style.lineHeight = 'normal';
-    statisticsButton.style.verticalAlign = 'center';
-    statisticsButton.style.padding = '0 8px';
-    statisticsButton.style.position = 'relative';
-
-    // 添加 hover
-    statisticsButton.style.transition = 'background-color 0.3s ease';
-    statisticsButton.addEventListener('mouseenter', () => {
-      statisticsButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-      showStatisticsDetailInfo(statisticsButton);
-    });
-    statisticsButton.addEventListener('mouseleave', () => {
+      var statisticsButton = document.createElement('div');
+      statisticsButton.textContent = statisticsInfo;
       statisticsButton.style.backgroundColor = 'transparent';
-      hideStatisticsDetailInfo(statisticsButton);
-    });
+      statisticsButton.style.color = 'white';
+      statisticsButton.style.border = 'none';
+      statisticsButton.style.textAlign = 'left';
+      statisticsButton.style.textDecoration = 'none';
+      statisticsButton.style.fontSize = '10px';
+      statisticsButton.style.cursor = 'pointer';
+      statisticsButton.style.whiteSpace = 'pre-wrap';
+      statisticsButton.style.lineHeight = 'normal';
+      statisticsButton.style.verticalAlign = 'center';
+      statisticsButton.style.padding = '0 8px';
+      statisticsButton.style.position = 'relative';
 
-    // 添加到导航栏
-    liItem.appendChild(statisticsButton);
-    navBar.appendChild(liItem);
+      // 添加 hover
+      statisticsButton.style.transition = 'background-color 0.3s ease';
+      statisticsButton.addEventListener('mouseenter', () => {
+        statisticsButton.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        showStatisticsDetailInfo(statisticsButton);
+      });
+      statisticsButton.addEventListener('mouseleave', () => {
+        statisticsButton.style.backgroundColor = 'transparent';
+        hideStatisticsDetailInfo(statisticsButton);
+      });
+
+      // 添加到导航栏
+      liItem.appendChild(statisticsButton);
+      navBar.appendChild(liItem);
+
+      resolve(true);
+    });
   }
 
   function showStatisticsDetailInfo(statisticsButton) {
@@ -945,6 +976,28 @@
   }
 
   /** =================================== 通用工具 ============================================ */
+
+  /** 检查是否是管理页面 */
+  function isManagePage() {
+    const pageUrl = window.location.href;
+    return pageUrl.includes('?q=') || pageUrl.includes('/auth-callback');
+  }
+
+  /** 获取导航栏 */
+  function getNavBar() {
+    const navBar = document.querySelector('#top-global');
+    return navBar && navBar.children ? navBar : null;
+  }
+
+  /** 导航栏是否存在元素 */
+  function hasNavBarItem(elementId) {
+    const navBar = getNavBar();
+    if (navBar && navBar.children && Array.from(navBar.children).some((element) => element.id === elementId)) {
+      return { id: elementId, exists: true, navBar };
+    } else {
+      return { id: elementId, exists: false, navBar: navBar };
+    }
+  }
 
   /** 获取配置 */
   function getConfig(key) {
