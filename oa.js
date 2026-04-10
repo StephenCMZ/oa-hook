@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.8.1
+// @version      0.8.2
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -48,6 +48,8 @@
   // 表单模板 ID
   const dailyTemplateId = '592233945022595072';
   const weekTemplateId = '592231167478988800';
+  const dailyVersionId = '1058193287577341952';
+  const weekVersionId = '1058204181233405952';
 
   // 组件 ID
   const nav_setting_btn_id = 'setting_btn';
@@ -77,9 +79,9 @@
       guardAddElement(addSettingBtn); // 添加导航栏设置按钮
       guardAddElement(addExportBtn); // 添加导航栏导出按钮
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
-      guardFillEditForm(autoFillFormPlan, [dailyTemplateId, weekTemplateId]); // 自动填充明日/下周工作计划
-      guardFillEditForm(autoFillFormDailyLog, [dailyTemplateId]); // 自动填充日报记录
-      guardFillEditForm(autoFillFormWeekLog, [weekTemplateId]); // 自动填充周报记录
+      guardFillEditForm(autoFillFormPlan, [dailyTemplateId, weekTemplateId, dailyVersionId, weekVersionId]); // 自动填充明日/下周工作计划
+      guardFillEditForm(autoFillFormDailyLog, [dailyTemplateId, dailyVersionId]); // 自动填充日报记录
+      guardFillEditForm(autoFillFormWeekLog, [weekTemplateId, weekVersionId]); // 自动填充周报记录
     });
   }
 
@@ -1096,7 +1098,7 @@
     if (!currentUrl || !currentUrl.length) return false;
 
     if (templateId && templateId.length) {
-      return currentUrl.includes(`templateId=${templateId}`);
+      return currentUrl.includes(`templateId=${templateId}`) || currentUrl.includes(`versionId=${templateId}`);
     }
 
     return currentUrl.includes('templateId=');
