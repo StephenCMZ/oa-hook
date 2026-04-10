@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.6
+// @version      0.7
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
+// @require https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js
 // @downloadURL  https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
 // @updateURL    https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
 // ==/UserScript==
@@ -26,6 +27,26 @@
   const userVacationUrl = '/api/Attendance/UserVacation/GetPage';
   const holidayUrl = 'https://cdn.jsdelivr.net/npm/chinese-days/dist/chinese-days.json';
 
+  // 设置
+  const defaultSettings = {
+    cozeAccessToken: '', // AI 密钥
+    weekDailyLogYear: '', // 下载周志年份，格式为 YYYY
+    showDownloadWeekDailyLogBtn: false, // 显示下载周志记录按钮
+    weekDailyLogStartDate: '', // 自动填充周志开始时间，格式为 YYYY-MM-DD
+    weekDailyLogEndDate: '', // 自动填充周志结束时间，格式为 YYYY-MM-DD
+    aiFillWeeklyLog: true, // 自动填充周报记录时，是否使用 AI 整理
+    autoFillWeeklyLog: true, // 自动填充周报记录
+    autoFillDailyLog: true, // 自动填充日报记录
+    autoFillPlan: true, // 自动填充明日/下周工作计划
+    autoSelectReviewer: true, // 自动选择日报/周报抄送人和点评人
+    showStatisticsInfo: true, // 显示统计信息
+  };
+  let settings = { ...defaultSettings, ...getConfig('settings') };
+
+  // 表单模板 ID
+  const dailyTemplateId = '592233945022595072';
+  const weekTemplateId = '592231167478988800';
+
   // 组件 ID
   const nav_setting_btn_id = 'setting_btn';
   const nav_export_btn_id = 'export_btn';
@@ -38,15 +59,11 @@
   const cozeChatUrl = 'https://api.coze.cn/v3/chat';
   const cozeRetrieveUrl = 'https://api.coze.cn/v3/chat/retrieve';
   const cozeMessageUrl = 'https://api.coze.cn/v3/chat/message/list';
-  let cozeAccessToken = getConfig('cozeAccessToken') || '';
   const cozeBotId = '7472312758722560039';
 
-  let weekDailyLogYear = '';
   const pageSize = 200;
   let authorization = '';
   let userName = '';
-
-  const loadFormTimes = 1000;
 
   init();
 
@@ -58,8 +75,9 @@
       guardAddElement(addSettingBtn); // 添加导航栏设置按钮
       guardAddElement(addExportBtn); // 添加导航栏导出按钮
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
-      setTimeout(autoFillFormPlan, loadFormTimes); // 自动填充明日/下周工作计划
-      setTimeout(autoFillFormWeekLog, loadFormTimes); // 自动填充周报记录
+      guardFillEditForm(autoFillFormPlan, [dailyTemplateId, weekTemplateId]); // 自动填充明日/下周工作计划
+      guardFillEditForm(autoFillFormDailyLog, [dailyTemplateId]); // 自动填充日报记录
+      guardFillEditForm(autoFillFormWeekLog, [weekTemplateId]); // 自动填充周报记录
     });
   }
 
@@ -77,6 +95,23 @@
     // 不存在，等待 100 毫秒，再次检查
     await new Promise((resolve) => setTimeout(resolve, 100));
     guardAddElement(addFun);
+  }
+
+  /** 守卫填充表单内容 */
+  async function guardFillEditForm(fillFun, templateIds) {
+    if (!fillFun || !templateIds || !templateIds.length) return;
+
+    // 仅在日报/周报计划页面填充
+    const formPage = templateIds.some((id) => isFormPage(id));
+    if (!formPage) return;
+
+    // 填充表单内容
+    const isFilled = await fillFun();
+    if (isFilled) return;
+
+    // 填充失败，等待 100 毫秒，再次检查
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    guardFillEditForm(fillFun, templateIds);
   }
 
   /** =================================== 周日报记录 快捷按钮 ============================================ */
@@ -105,29 +140,18 @@
 
   /** 自动填充表单明日/下周工作计划 */
   function autoFillFormPlan() {
-    // 是否为编辑模式
-    const operatorBar = document.querySelector('#start-operator');
-    if (!operatorBar || !operatorBar.outerHTML.includes('提交申请')) {
-      log('【检查页面】', '非表单编辑页面');
-      return;
-    }
+    return new Promise(async (resolve) => {
+      // 未开启自动填充明日/下周工作计划，直接返回
+      if (!settings.autoFillPlan) return resolve(true);
 
-    // 获取表单
-    const formcontent = queryIFrameFormContent(document);
-    if (!formcontent) {
-      log('【检查页面】', '未找到表单');
-      return;
-    }
+      // 获取计划输入框
+      const planTextarea = getPageFormTextarea(['明日工作计划', '下周工作计划']);
+      if (!planTextarea) return resolve(false);
 
-    // 获取计划输入框
-    const planTextarea = queryFormTextarea(formcontent, ['明日工作计划', '下周工作计划']);
-    if (!planTextarea) {
-      log('【检查页面】', '未找到计划输入框');
-      return;
-    }
-
-    // 填入计划
-    fillFormPlan(planTextarea);
+      // 填入计划
+      fillFormPlan(planTextarea);
+      resolve(true);
+    });
   }
 
   /** 填充表单计划内容 */
@@ -155,35 +179,6 @@
     } catch (error) {
       log('【表单计划】', '填充计划内容失败');
     }
-  }
-
-  /** 获取 iFrame 表单 */
-  function queryIFrameFormContent(document) {
-    if (!document) return;
-    const formIframe = document.querySelectorAll('#iFrameResizer0');
-    if (!formIframe || !formIframe.length) return;
-    const iframeDocument = formIframe[0].contentDocument || formIframe[0].contentWindow.document;
-    if (!iframeDocument) return;
-    const formcontent = iframeDocument.querySelector('#formcontent');
-    return formcontent;
-  }
-
-  /** 获取获取表单中 输入框 */
-  function queryFormTextarea(formContent, fields = []) {
-    if (!formContent || !fields.length) return;
-    let formTextareas = formContent.querySelectorAll('textarea');
-    if (!formTextareas || !formTextareas.length) return;
-    let formTextarea = null;
-    formTextareas.forEach((item) => {
-      const fsref = item.getAttribute('fsref');
-      if (!fsref) return;
-      const textareas = fields.filter((field) => fsref.includes(field));
-      if (textareas.length) {
-        formTextarea = item;
-        return;
-      }
-    });
-    return formTextarea;
   }
 
   /** 获取最新日志 */
@@ -235,32 +230,67 @@
     });
   }
 
+  /** =================================== 自动填充日工作总结 ============================================ */
+
+  /** 自动填充表单日工作总结 */
+  function autoFillFormDailyLog() {
+    return new Promise(async (resolve) => {
+      // 检查是否开启自动填充日志
+      if (!settings.autoFillDailyLog) return resolve(true);
+
+      // 获取今天工作总结输入框
+      const dailyLogTextarea = getPageFormTextarea(['今天工作总结']);
+      if (!dailyLogTextarea) return resolve(false);
+
+      // 填充日工作总结内容
+      fillFormDailyLog(dailyLogTextarea);
+      resolve(true);
+    });
+  }
+
+  /** 填充表单日工作总结内容 */
+  async function fillFormDailyLog(dailyLogTextarea) {
+    if (!dailyLogTextarea) return;
+
+    try {
+      // 获取最新日志
+      const lastDailyLogRes = await getLastDailyLog();
+      const lastDailyLog = (((lastDailyLogRes || {}).Data || {}).Data || [])[0];
+      if (!lastDailyLog) {
+        log('【日工作总结】', '获取最新日报失败');
+        return;
+      }
+
+      // 获取最新日志内容
+      const dailyContent = await getDailyContent(lastDailyLog.ProcessId);
+      if (!dailyContent || !dailyContent.content) {
+        log('【日工作总结】', '获取最新日报内容失败');
+        return;
+      }
+
+      // 填充日工作总结内容
+      dailyLogTextarea.value = dailyContent.content;
+    } catch (error) {
+      log('【日工作总结】', '填充日工作总结内容失败');
+    }
+  }
+
   /** =================================== 自动填充本周工作总结 ============================================ */
 
   /** 自动填充表单本周工作总结 */
   function autoFillFormWeekLog() {
-    // 是否为编辑模式
-    const operatorBar = document.querySelector('#start-operator');
-    if (!operatorBar || !operatorBar.outerHTML.includes('提交申请')) {
-      log('【检查页面】', '非表单编辑页面');
-      return;
-    }
+    return new Promise(async (resolve) => {
+      // 检查是否开启自动填充周志
+      if (!settings.autoFillWeeklyLog) return resolve(true);
 
-    // 获取表单
-    const formcontent = queryIFrameFormContent(document);
-    if (!formcontent) {
-      log('【检查页面】', '未找到表单');
-      return;
-    }
+      // 获取本周工作总结输入框
+      const weekLogTextarea = getPageFormTextarea(['本周工作总结']);
+      if (!weekLogTextarea) return resolve(false);
 
-    // 获取本周工作总结输入框
-    const weekLogTextarea = queryFormTextarea(formcontent, ['本周工作总结']);
-    if (!weekLogTextarea) {
-      log('【检查页面】', '未找到本周工作总结输入框');
-      return;
-    }
-
-    fillFormWeekLog(weekLogTextarea);
+      // 填充本周工作总结内容
+      fillFormWeekLog(weekLogTextarea);
+      resolve(true);
+    });
   }
 
   /** 填充表单本周工作总结内容 */
@@ -294,7 +324,14 @@
         return toast('本周暂无无日志');
       }
 
+      // 不开启 AI 整理，直接填充原始内容
+      if (!settings.aiFillWeeklyLog) {
+        weekLogTextarea.value = weekLogs;
+        return;
+      }
+
       // AI 整理内容
+      const cozeAccessToken = settings.cozeAccessToken;
       if (cozeAccessToken && cozeAccessToken.length) {
         try {
           const aiLogDetails = await cozeChat(weekLogs);
@@ -318,8 +355,8 @@
   }
 
   function getWeekDailyLogList() {
-    let startDate = getConfig('weekDailyLogStartDate') || '';
-    let endDate = getConfig('weekDailyLogEndDate') || '';
+    let startDate = settings.weekDailyLogStartDate || '';
+    let endDate = settings.weekDailyLogEndDate || '';
     if (!startDate.length || !isDateValid(startDate)) startDate = getMonday();
     if (!endDate.length || !isDateValid(endDate)) endDate = getSunday();
     const data = {
@@ -364,7 +401,9 @@
 
   /** =================================== 自动选择日报/周报抄送人和点评人 ============================================ */
 
+  /** 自动选择日报/周报抄送人和点评人 */
   function autoSelectReviewer() {
+    if (!settings.autoSelectReviewer) return;
     hookRequest({
       url: workFlowGetPreSelUsersUrl,
       fun: function (res) {
@@ -398,6 +437,9 @@
   /** 导航栏添加 下载周志 按钮 */
   function addExportBtn() {
     return new Promise((resolve) => {
+      // 检查是否显示下载周志记录按钮
+      if (!settings.showDownloadWeekDailyLogBtn) return resolve(true);
+
       var { navBar, exists } = hasNavBarItem(nav_export_btn_id);
       if (!navBar || exists) return resolve(exists);
 
@@ -433,6 +475,7 @@
     });
   }
 
+  /** 导出全年周志 markdown 文件 */
   async function exportWeeklyLogs() {
     toast('开始导出周志，请稍后...');
     try {
@@ -490,11 +533,10 @@
 
   /** 获取全年周计划列表 */
   function getWeeklyLogList() {
-    let year = getConfig('weekDailyLogYear') || '';
+    let year = settings.weekDailyLogYear || '';
     if (!year.length || !isYearValid(year)) {
       year = new Date().getFullYear().toString();
     }
-    weekDailyLogYear = year;
     const data = {
       page: 1,
       pageSize: pageSize,
@@ -581,7 +623,7 @@
         settingButton.style.backgroundColor = 'transparent';
       };
 
-      settingButton.onclick = settings;
+      settingButton.onclick = showSettings;
 
       liItem.appendChild(settingButton);
       navBar.insertBefore(liItem, navBar.firstChild);
@@ -591,7 +633,7 @@
   }
 
   /** 设置弹窗 */
-  function settings() {
+  function showSettings() {
     // 创建弹窗容器
     const dialog = document.createElement('div');
     dialog.style.position = 'fixed';
@@ -602,6 +644,7 @@
     dialog.style.padding = '20px';
     dialog.style.borderRadius = '4px';
     dialog.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+    dialog.style.minWidth = '500px';
     dialog.style.zIndex = '9999';
 
     // 创建弹窗标题
@@ -617,66 +660,31 @@
     inputContainer.style.gap = '15px';
     inputContainer.style.marginBottom = '20px';
 
-    // 创建 AI 密钥输入框
-    const aiKeyInput = document.createElement('input');
-    aiKeyInput.type = 'text';
-    aiKeyInput.placeholder = '请输入 AI 密钥';
-    aiKeyInput.value = cozeAccessToken;
-    aiKeyInput.style.width = '400px';
-    aiKeyInput.style.padding = '8px';
-    aiKeyInput.style.border = '1px solid #d9d9d9';
-    aiKeyInput.style.borderRadius = '4px';
-    inputContainer.appendChild(aiKeyInput);
-
-    // 创建周志开始时间输入框
-    const weekDailyLogStartDateInput = document.createElement('input');
-    weekDailyLogStartDateInput.type = 'text';
-    weekDailyLogStartDateInput.placeholder = '自动填充周志开始时间格式为 YYYY-MM-DD, 不填默认本周一';
-    weekDailyLogStartDateInput.value = getConfig('weekDailyLogStartDate') || '';
-    weekDailyLogStartDateInput.style.width = '400px';
-    weekDailyLogStartDateInput.style.padding = '8px';
-    weekDailyLogStartDateInput.style.border = '1px solid #d9d9d9';
-    weekDailyLogStartDateInput.style.borderRadius = '4px';
-    inputContainer.appendChild(weekDailyLogStartDateInput);
-
-    // 创建周志结束时间输入框
-    const weekDailyLogEndDateInput = document.createElement('input');
-    weekDailyLogEndDateInput.type = 'text';
-    weekDailyLogEndDateInput.placeholder = '自动填充周志结束时间格式为 YYYY-MM-DD, 不填默认本周日';
-    weekDailyLogEndDateInput.value = getConfig('weekDailyLogEndDate') || '';
-    weekDailyLogEndDateInput.style.width = '400px';
-    weekDailyLogEndDateInput.style.padding = '8px';
-    weekDailyLogEndDateInput.style.border = '1px solid #d9d9d9';
-    weekDailyLogEndDateInput.style.borderRadius = '4px';
-    inputContainer.appendChild(weekDailyLogEndDateInput);
-
-    // 创建下载周志年份输入框
-    const weekDailyLogYearInput = document.createElement('input');
-    weekDailyLogYearInput.type = 'text';
-    weekDailyLogYearInput.placeholder = '下载周志年份格式为 YYYY, 不填默认当前年份';
-    weekDailyLogYearInput.value = getConfig('weekDailyLogYear') || '';
-    weekDailyLogYearInput.style.width = '400px';
-    weekDailyLogYearInput.style.padding = '8px';
-    weekDailyLogYearInput.style.border = '1px solid #d9d9d9';
-    weekDailyLogYearInput.style.borderRadius = '4px';
-    inputContainer.appendChild(weekDailyLogYearInput);
-
-    // 创建统计信息开关
-    const statisticsSwitchElement = document.createElement('div');
-    statisticsSwitchElement.style.display = 'flex';
-    statisticsSwitchElement.style.alignItems = 'center';
-
-    const statisticsSwitchLabel = document.createElement('label');
-    statisticsSwitchLabel.textContent = '显示统计信息';
-    statisticsSwitchElement.appendChild(statisticsSwitchLabel);
-
-    const statisticsSwitch = document.createElement('input');
-    statisticsSwitch.type = 'checkbox';
-    statisticsSwitch.checked = getConfig('showStatisticsInfo');
-    statisticsSwitch.style.marginLeft = '8px';
-    statisticsSwitchElement.appendChild(statisticsSwitch);
-    inputContainer.appendChild(statisticsSwitchElement);
-
+    // 创建设置项
+    const settingItems = [
+      { key: 'cozeAccessToken', type: 'text', placeholder: '请输入 AI 密钥' },
+      { key: 'weekDailyLogStartDate', type: 'text', placeholder: '自动填充周志开始时间格式为 YYYY-MM-DD, 不填默认本周一' },
+      { key: 'weekDailyLogEndDate', type: 'text', placeholder: '自动填充周志结束时间格式为 YYYY-MM-DD, 不填默认本周日' },
+      { key: 'weekDailyLogYear', type: 'text', placeholder: '下载周志年份格式为 YYYY, 不填默认当前年份' },
+      { key: 'autoFillDailyLog', type: 'checkbox', labelText: '自动填充日志' },
+      { key: 'autoFillWeeklyLog', type: 'checkbox', labelText: '自动填充周志' },
+      { key: 'aiFillWeeklyLog', type: 'checkbox', labelText: 'AI 整理周志' },
+      { key: 'autoFillPlan', type: 'checkbox', labelText: '自动填充计划' },
+      { key: 'autoSelectReviewer', type: 'checkbox', labelText: '自动选点评人' },
+      { key: 'showDownloadWeekDailyLogBtn', type: 'checkbox', labelText: '显示下载周志' },
+      { key: 'showStatisticsInfo', type: 'checkbox', labelText: '显示统计信息' },
+    ];
+    settingItems.forEach((item) => {
+      if (item.type === 'text') {
+        const { inputElement, input } = createInputElement({ placeholder: item.placeholder, value: settings[item.key] });
+        inputContainer.appendChild(inputElement);
+        item.formItem = input;
+      } else if (item.type === 'checkbox') {
+        const { checkboxElement, checkbox } = createCheckboxElement({ labelText: item.labelText, value: settings[item.key] });
+        inputContainer.appendChild(checkboxElement);
+        item.formItem = checkbox;
+      }
+    });
     dialog.appendChild(inputContainer);
 
     // 创建按钮容器
@@ -684,63 +692,55 @@
     btnContainer.style.textAlign = 'right';
 
     // 创建取消按钮
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = '取消';
-    cancelBtn.style.marginRight = '8px';
-    cancelBtn.style.padding = '4px 15px';
-    cancelBtn.style.backgroundColor = '#f0f0f0';
-    cancelBtn.style.border = 'none';
-    cancelBtn.style.borderRadius = '4px';
-    cancelBtn.style.cursor = 'pointer';
-    cancelBtn.onclick = () => {
-      document.body.removeChild(dialog);
-    };
+    const cancelBtn = createButtonElement({
+      title: '取消',
+      onClick: () => document.body.removeChild(dialog),
+    });
 
     // 创建确认按钮
-    const confirmBtn = document.createElement('button');
-    confirmBtn.textContent = '确认';
-    confirmBtn.style.padding = '4px 15px';
-    confirmBtn.style.backgroundColor = '#1890ff';
-    confirmBtn.style.color = 'white';
-    confirmBtn.style.border = 'none';
-    confirmBtn.style.borderRadius = '4px';
-    confirmBtn.style.cursor = 'pointer';
-    confirmBtn.onclick = () => {
-      // 保存 AI 密钥配置
-      cozeAccessToken = aiKeyInput.value;
-      setConfig('cozeAccessToken', aiKeyInput.value);
+    const confirmBtn = createButtonElement({
+      title: '确认',
+      type: 'primary',
+      onClick: () => {
+        // 校验周志开始时间
+        const weekDailyLogStartDate = settingItems.find((item) => item.key === 'weekDailyLogStartDate')?.formItem?.value || '';
+        if (weekDailyLogStartDate.length && !isDateValid(weekDailyLogStartDate)) {
+          toast('周志开始时间格式异常');
+          return;
+        }
+        // 校验周志结束时间
+        const weekDailyLogEndDate = settingItems.find((item) => item.key === 'weekDailyLogEndDate')?.formItem?.value || '';
+        if (weekDailyLogEndDate.length && !isDateValid(weekDailyLogEndDate)) {
+          toast('周志结束时间格式异常');
+          return;
+        }
+        // 校验下载周志年份
+        const weekDailyLogYear = settingItems.find((item) => item.key === 'weekDailyLogYear')?.formItem?.value || '';
+        if (weekDailyLogYear.length && !isYearValid(weekDailyLogYear)) {
+          toast('周志年份格式异常');
+          return;
+        }
 
-      // 保存周志开始时间
-      const weekDailyLogStartDate = weekDailyLogStartDateInput.value || '';
-      if (weekDailyLogStartDate.length && !isDateValid(weekDailyLogStartDate)) {
-        toast('周志开始时间格式异常');
-        return;
-      }
-      setConfig('weekDailyLogStartDate', weekDailyLogStartDate);
+        // 获取所有设置项的值
+        const _settings = { ...settings };
+        settingItems.forEach((item) => {
+          if (item.type === 'text') {
+            _settings[item.key] = item.formItem.value;
+          } else if (item.type === 'checkbox') {
+            _settings[item.key] = item.formItem.checked;
+          }
+        });
 
-      // 保存周志结束时间
-      const weekDailyLogEndDate = weekDailyLogEndDateInput.value || '';
-      if (weekDailyLogEndDate.length && !isDateValid(weekDailyLogEndDate)) {
-        toast('周志结束时间格式异常');
-        return;
-      }
-      setConfig('weekDailyLogEndDate', weekDailyLogEndDate);
+        // 保存设置
+        settings = _settings;
+        setConfig('settings', _settings);
+        console.log('保存设置:', _settings);
 
-      // 保存下载周志年份
-      const weekDailyLogYear = weekDailyLogYearInput.value || '';
-      if (weekDailyLogYear.length && !isYearValid(weekDailyLogYear)) {
-        toast('周志年份格式异常');
-        return;
-      }
-      setConfig('weekDailyLogYear', weekDailyLogYear);
-
-      // 保存统计信息开关状态
-      setConfig('showStatisticsInfo', statisticsSwitch.checked);
-
-      // 关闭弹窗
-      document.body.removeChild(dialog);
-      toast('保存成功');
-    };
+        // 关闭弹窗
+        document.body.removeChild(dialog);
+        toast('保存成功, 请刷新页面生效');
+      },
+    });
 
     btnContainer.appendChild(cancelBtn);
     btnContainer.appendChild(confirmBtn);
@@ -749,11 +749,77 @@
     document.body.appendChild(dialog);
   }
 
+  /** 创建输入框 */
+  function createInputElement({ labelText, value, placeholder }) {
+    const inputElement = document.createElement('div');
+    inputElement.style.display = 'flex';
+    inputElement.style.alignItems = 'center';
+
+    if (labelText && labelText.trim() !== '') {
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      label.style.fontSize = '14px';
+      label.style.marginRight = '8px';
+      inputElement.appendChild(label);
+    }
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = placeholder;
+    input.value = value || '';
+    input.style.flex = 1;
+    input.style.padding = '8px';
+    input.style.border = '1px solid #d9d9d9';
+    input.style.borderRadius = '4px';
+    inputElement.appendChild(input);
+
+    return { inputElement, input };
+  }
+
+  /** 创建复选框 */
+  function createCheckboxElement({ labelText, value }) {
+    const checkboxElement = document.createElement('div');
+    checkboxElement.style.display = 'flex';
+    checkboxElement.style.alignItems = 'center';
+
+    if (labelText && labelText.trim() !== '') {
+      const label = document.createElement('label');
+      label.textContent = labelText;
+      label.style.fontSize = '14px';
+      label.style.marginRight = '8px';
+      checkboxElement.appendChild(label);
+    }
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = value || false;
+    checkboxElement.appendChild(checkbox);
+
+    return { checkboxElement, checkbox };
+  }
+
+  /** 创建按钮 */
+  function createButtonElement({ title, type = 'normal', onClick }) {
+    const button = document.createElement('button');
+    button.textContent = title;
+    button.style.margin = '4px';
+    button.style.padding = '4px 15px';
+    button.style.backgroundColor = type === 'primary' ? '#1890ff' : type === 'danger' ? '#ff4d4f' : '#f0f0f0';
+    button.style.color = type === 'primary' ? 'white' : type === 'danger' ? 'white' : 'black';
+    button.style.border = 'none';
+    button.style.borderRadius = '4px';
+    button.style.cursor = 'pointer';
+    button.onclick = onClick;
+
+    return button;
+  }
+
   /** =================================== 统计信息 ============================================ */
 
+  /** 更新统计信息 */
   function updateStatisticsInfo() {
     return new Promise(async (resolve) => {
-      if (!getConfig('showStatisticsInfo')) return;
+      if (!settings.showStatisticsInfo) return;
 
       // 今日日期
       const today = new Date();
@@ -827,6 +893,7 @@
     });
   }
 
+  /** 格式化请假信息 */
   function formVacations(userVacation = {}) {
     if (!userVacation || !Object.keys(userVacation).length) {
       return {};
@@ -848,6 +915,7 @@
     return vacations;
   }
 
+  /** 格式化请假信息，例如：1/2 表示已休1天，共2天 */
   function formVacationByKey(userVacation = {}, key = '') {
     if (!userVacation || !Object.keys(userVacation).length || !key || !key.length) {
       return { total: 0, used: 0, key: key };
@@ -857,17 +925,18 @@
     return { total: eval(!total || total === '-' ? 0 : total), used: eval(!used || used === '-' ? 0 : used), key: key };
   }
 
-  // 计算日期相差天数
+  /** 计算日期相差天数 */
   function calculateDateDiff(date1, date2 = new Date()) {
     const diffTime = Math.abs(date2 - date1);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
   }
 
+  /** 添加统计信息 */
   async function addStatisticsInfo() {
     return new Promise(async (resolve) => {
       // 不显示统计信息时，直接返回
-      if (!getConfig('showStatisticsInfo')) return resolve(true);
+      if (!settings.showStatisticsInfo) return resolve(true);
 
       var { navBar, exists } = hasNavBarItem(nav_statistics_info_id);
       if (!navBar || exists) return resolve(exists);
@@ -924,6 +993,7 @@
     });
   }
 
+  /** 显示统计信息详情 */
   function showStatisticsDetailInfo(statisticsButton) {
     let detailInfo = `${statistics.todayDate}`;
 
@@ -968,6 +1038,7 @@
     statisticsButton.appendChild(statisticsDetailInfo);
   }
 
+  /** 隐藏统计信息详情 */
   function hideStatisticsDetailInfo(statisticsButton) {
     const statisticsDetailInfo = statisticsButton.querySelector('#statistics-detail-info');
     if (statisticsDetailInfo) {
@@ -975,9 +1046,89 @@
     }
   }
 
+  /** =================================== 表单工具 ============================================ */
+
+  /** 检查页面是否为表单编辑页面 */
+  function isFormPage(templateId) {
+    const currentUrl = getCurrentUrl();
+    if (!currentUrl || !currentUrl.length) return false;
+
+    if (templateId && templateId.length) {
+      return currentUrl.includes(`templateId=${templateId}`);
+    }
+
+    return currentUrl.includes('templateId=');
+  }
+
+  /** 获取页面表单 */
+  function getPageForm() {
+    // 是否为编辑模式
+    const operatorBar = document.querySelector('#start-operator');
+    if (!operatorBar || !operatorBar.outerHTML.includes('提交申请')) {
+      log('【检查页面】', '非表单编辑页面');
+      return null;
+    }
+
+    // 获取表单
+    const formcontent = queryIFrameFormContent(document);
+    if (!formcontent) {
+      log('【检查页面】', '未找到表单');
+      return null;
+    }
+
+    return formcontent;
+  }
+
+  /** 获取页面表单中 输入框 */
+  function getPageFormTextarea(fields = []) {
+    // 获取表单
+    const formcontent = getPageForm();
+    if (!formcontent) {
+      return null;
+    }
+
+    // 获取输入框
+    const textarea = queryFormTextarea(formcontent, fields);
+    if (!textarea) {
+      log('【检查页面】', `未找到输入框： ${fields.join('|')}`);
+      return null;
+    }
+
+    return textarea;
+  }
+
+  /** 获取 iFrame 表单 */
+  function queryIFrameFormContent(document) {
+    if (!document) return;
+    const formIframe = document.querySelectorAll('#iFrameResizer0');
+    if (!formIframe || !formIframe.length) return;
+    const iframeDocument = formIframe[0].contentDocument || formIframe[0].contentWindow.document;
+    if (!iframeDocument) return;
+    const formcontent = iframeDocument.querySelector('#formcontent');
+    return formcontent;
+  }
+
+  /** 获取获取表单中 输入框 */
+  function queryFormTextarea(formContent, fields = []) {
+    if (!formContent || !fields.length) return;
+    let formTextareas = formContent.querySelectorAll('textarea');
+    if (!formTextareas || !formTextareas.length) return;
+    let formTextarea = null;
+    formTextareas.forEach((item) => {
+      const fsref = item.getAttribute('fsref');
+      if (!fsref) return;
+      const textareas = fields.filter((field) => fsref.includes(field));
+      if (textareas.length) {
+        formTextarea = item;
+        return;
+      }
+    });
+    return formTextarea;
+  }
+
   /** =================================== 通用工具 ============================================ */
 
-  /** 检查是否是管理页面 */
+  /** 检查是否是管理页面，即非登录、注册等页面 */
   function isManagePage() {
     const pageUrl = window.location.href;
     return pageUrl.includes('?q=') || pageUrl.includes('/auth-callback');
@@ -1018,11 +1169,81 @@
   /** 获取授权 */
   function getAuthorization() {
     return new Promise((resolve) => {
-      authorization =
-        JSON.parse(sessionStorage.getItem('UniWork.user:http://oa.gdytw.net/identity:appjs') || '{}').access_token ||
-        '';
+      authorization = JSON.parse(sessionStorage.getItem('UniWork.user:http://oa.gdytw.net/identity:appjs') || '{}').access_token || '';
       authorization.length ? resolve(authorization) : resolve('');
     });
+  }
+
+  /** 获取当前页面 URL */
+  function getCurrentUrl() {
+    const url = window.location.href;
+    if (!url || !url.length) return url;
+
+    const Q_PARAM = '?q=';
+    const qIndex = url.indexOf(Q_PARAM);
+    if (qIndex === -1) return url;
+
+    const key = getURLPassword();
+    if (!key || !key.length) return url;
+
+    try {
+      // 提取base64编码的加密数据（q=后面的部分）
+      const encryptedBase64 = url.substring(qIndex + 3);
+      const decodedData = atob(encryptedBase64);
+
+      const ivHex = decodedData.substring(0, 32);
+      const cipherHex = decodedData.substring(32);
+
+      if (!CryptoJS) {
+        throw new Error('CryptoJS not available. Please include crypto-js library.');
+      }
+
+      // 解析IV和密钥
+      const iv = CryptoJS.enc.Hex.parse(ivHex);
+      const parsedKey = CryptoJS.enc.Utf8.parse(key);
+
+      // AES解密
+      const decrypted = CryptoJS.AES.decrypt(cipherHex, parsedKey, { iv: iv, padding: CryptoJS.pad.Pkcs7 });
+      const decryptedUrl = decrypted.toString(CryptoJS.enc.Utf8);
+
+      if (!decryptedUrl) return url;
+
+      // 如果是完整URL，保留q参数之前的部分
+      if (url.startsWith('http')) {
+        const fullUrl = url.substring(0, qIndex).trim().replace(/\/$/, '') + '/' + decryptedUrl.trim().replace(/^\/+/, '');
+        log('【获取当前页面 URL】', fullUrl);
+        return fullUrl;
+      }
+
+      return decryptedUrl;
+    } catch (error) {
+      log('【获取当前页面 URL】', `解密失败： ${error.message}, 原始URL: ${url}`);
+      return url;
+    }
+  }
+
+  /** 获取 URL 解析密码 */
+  function getURLPassword() {
+    const cookies = getCookies() || {};
+    const vid = cookies['.vid'] || '';
+
+    let password = '';
+    if (vid.length) {
+      password = atob(decodeURIComponent(vid));
+      password = CryptoJS.enc.Hex.parse(password).toString(CryptoJS.enc.Utf8);
+    }
+
+    return password;
+  }
+
+  /** 获取所有 Cookie */
+  function getCookies() {
+    const cookies = {};
+    document.cookie.split(';').forEach((item) => {
+      const [key, value] = item.trim().split('=');
+      if (key) cookies[key] = decodeURIComponent(value);
+    });
+    return cookies;
   }
 
   /** 拦截请求 */
@@ -1165,7 +1386,7 @@
           url: cozeChatUrl,
           headers: {
             'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + cozeAccessToken,
+            Authorization: 'Bearer ' + settings.cozeAccessToken,
           },
           data: {
             bot_id: cozeBotId,
@@ -1213,7 +1434,7 @@
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + cozeAccessToken,
+            Authorization: 'Bearer ' + settings.cozeAccessToken,
           },
         });
       };
@@ -1236,7 +1457,7 @@
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + cozeAccessToken,
+            Authorization: 'Bearer ' + settings.cozeAccessToken,
           },
         });
         log('【AI查询对话结果】', chatMessageRes);
@@ -1279,10 +1500,15 @@
       type: 'text/markdown;charset=utf-8',
     });
 
+    let year = settings.weekDailyLogYear || '';
+    if (!year.length || !isYearValid(year)) {
+      year = new Date().getFullYear().toString();
+    }
+
     // 创建下载链接
     const downloadLink = document.createElement('a');
     downloadLink.href = URL.createObjectURL(blob);
-    downloadLink.download = `${userName}_周报_${weekDailyLogYear}_${new Date().toLocaleDateString()}.md`;
+    downloadLink.download = `${userName}_周报_${year}_${new Date().toLocaleDateString()}.md`;
 
     // 触发下载
     document.body.appendChild(downloadLink);
