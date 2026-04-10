@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.8
+// @version      0.8.1
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
