@@ -1,16 +1,16 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.7
+// @version      0.8
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_xmlhttpRequest
-// @require https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js
-// @downloadURL  https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
-// @updateURL    https://github.com/StephenCMZ/oa-hook/blob/main/oa.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/StephenCMZ/oa-hook@main/oa.js
+// @updateURL    https://cdn.jsdelivr.net/gh/StephenCMZ/oa-hook@main/oa.js
 // ==/UserScript==
 
 (function () {
@@ -26,6 +26,7 @@
   const workFlowGetPreSelUsersUrl = '/api/Workflow/FlowMan/GetPreSelUsers';
   const userVacationUrl = '/api/Attendance/UserVacation/GetPage';
   const holidayUrl = 'https://cdn.jsdelivr.net/npm/chinese-days/dist/chinese-days.json';
+  const hitokotoUrl = 'https://v1.hitokoto.cn/?c=k&encode=text';
 
   // 设置
   const defaultSettings = {
@@ -40,6 +41,7 @@
     autoFillPlan: true, // 自动填充明日/下周工作计划
     autoSelectReviewer: true, // 自动选择日报/周报抄送人和点评人
     showStatisticsInfo: true, // 显示统计信息
+    showHitokoto: true, // 显示每日一言
   };
   let settings = { ...defaultSettings, ...getConfig('settings') };
 
@@ -673,6 +675,7 @@
       { key: 'autoSelectReviewer', type: 'checkbox', labelText: '自动选点评人' },
       { key: 'showDownloadWeekDailyLogBtn', type: 'checkbox', labelText: '显示下载周志' },
       { key: 'showStatisticsInfo', type: 'checkbox', labelText: '显示统计信息' },
+      { key: 'showHitokoto', type: 'checkbox', labelText: '显示每日一言' },
     ];
     settingItems.forEach((item) => {
       if (item.type === 'text') {
@@ -893,6 +896,37 @@
     });
   }
 
+  /** 更新每日一言 */
+  function updateHitokoto() {
+    return new Promise(async (resolve) => {
+      // 判断是否显示每日一言
+      if (!settings.showHitokoto) {
+        statistics.hitokoto = '';
+        return resolve('');
+      }
+
+      // 判断今天是否已经获取过每日一言
+      const { hitokoto, timestamp } = getConfig('hitokoto') || {};
+      const today = new Date();
+      const date = timestamp ? new Date(timestamp) : null;
+      const isToday = date && date.getDate() === today.getDate() && date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+      if (isToday && hitokoto && hitokoto.length) {
+        statistics.hitokoto = hitokoto;
+        return resolve(hitokoto);
+      }
+
+      // 获取每日一言
+      try {
+        const hitokotoRes = await requestGM({ url: hitokotoUrl, method: 'GET' });
+        statistics.hitokoto = hitokotoRes || '';
+        setConfig('hitokoto', { hitokoto: hitokotoRes || '', timestamp: today.getTime() });
+        resolve(hitokotoRes || '');
+      } catch (error) {
+        resolve('');
+      }
+    });
+  }
+
   /** 格式化请假信息 */
   function formVacations(userVacation = {}) {
     if (!userVacation || !Object.keys(userVacation).length) {
@@ -942,6 +976,7 @@
       if (!navBar || exists) return resolve(exists);
 
       await updateStatisticsInfo();
+      await updateHitokoto();
 
       var liItem = document.createElement('li');
       liItem.id = nav_statistics_info_id;
@@ -1014,6 +1049,13 @@
       statistics.vacations.forEach((item) => {
         detailInfo += `\n${item.name}：${item.value} 天`;
       });
+    }
+
+    // 每日一言
+    if (statistics.hitokoto && statistics.hitokoto.length) {
+      const _hitokoto = statistics.hitokoto.replace(/.{1,10}/g, '$&\n');
+      detailInfo += `\n\n🤔`;
+      detailInfo += `\n${_hitokoto}`;
     }
 
     // 显示统计信息详情
