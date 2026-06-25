@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.8.2
+// @version      0.8.3
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -870,9 +870,20 @@
             endDate: `${year}-12-31 23:59:59`,
           },
         });
+        const userVacationUsableRes = await request({
+          url: userVacationUrl,
+          data: {
+            page: 1,
+            pageSize: 10,
+            isUsableDays: true,
+            startDate: `${year}-01-01 00:00:00`,
+            endDate: `${year}-12-31 23:59:59`,
+          },
+        });
         const userVacations = ((userVacationRes || {}).Data || {}).Data || [];
+        const userVacationsUsable = ((userVacationUsableRes || {}).Data || {}).Data || [];
         if (userVacations.length) {
-          statistics.vacations = formVacations(userVacations[0] || {});
+          statistics.vacations = formVacations(userVacations[0] || {}, userVacationsUsable[0] || {});
         } else {
           statistics.vacations = [];
         }
@@ -930,14 +941,20 @@
   }
 
   /** 格式化请假信息 */
-  function formVacations(userVacation = {}) {
+  function formVacations(userVacation = {}, userVacationUsable = {}) {
     if (!userVacation || !Object.keys(userVacation).length) {
       return {};
     }
     const vacations = [];
 
     const annual = formVacationByKey(userVacation, '1');
-    vacations.push({ key: 'annual', name: '剩余年假', value: annual.total - annual.used });
+    if (userVacationUsable && Object.keys(userVacationUsable).length && userVacationUsable['1'] && userVacationUsable['1'].length && userVacationUsable['1'] !== '-') {
+      // 年假结余会失效，需从可休天数中获取
+      const annualUsableTotal = eval((userVacationUsable['1'] || '').trim());
+      vacations.push({ key: 'annual', name: '剩余年假', value: annualUsableTotal });
+    } else {
+      vacations.push({ key: 'annual', name: '剩余年假', value: annual.total - annual.used });
+    }
     vacations.push({ key: 'annual-used', name: '已休年假', value: annual.used });
     vacations.push({ key: 'personal-used', name: '已请事假', value: formVacationByKey(userVacation, '4').used });
     vacations.push({ key: 'sick-used', name: '已请病假', value: formVacationByKey(userVacation, '3').used });
