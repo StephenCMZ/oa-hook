@@ -30,7 +30,7 @@
 
   // 设置
   const defaultSettings = {
-    cozeAccessToken: '', // AI 密钥
+    openAIAPIKey: '', // OpenAI API 密钥
     weekDailyLogYear: '', // 下载周志年份，格式为 YYYY
     showDownloadWeekDailyLogBtn: false, // 显示下载周志记录按钮
     weekDailyLogStartDate: '', // 自动填充周志开始时间，格式为 YYYY-MM-DD
@@ -60,10 +60,9 @@
   let statistics = {};
 
   // AI
-  const cozeChatUrl = 'https://api.coze.cn/v3/chat';
-  const cozeRetrieveUrl = 'https://api.coze.cn/v3/chat/retrieve';
-  const cozeMessageUrl = 'https://api.coze.cn/v3/chat/message/list';
-  const cozeBotId = '7472312758722560039';
+  const openAIBaseURL = 'https://opencode.ai/zen';
+  const openAIModel = 'deepseek-v4-flash-free';
+  const defaultSystemPrompt = '你是一名助理，负责整理工作日志。请将以下日志内容进行归纳总结，提取关键工作内容，使之更清晰、有条理。保持简洁，不要遗漏重要事项。';
 
   const pageSize = 200;
   let authorization = '';
@@ -334,11 +333,11 @@
         return;
       }
 
-      // AI 整理内容
-      const cozeAccessToken = settings.cozeAccessToken;
-      if (cozeAccessToken && cozeAccessToken.length) {
+      // OpenAI API 整理内容
+      const openAIAPIKey = settings.openAIAPIKey;
+      if (openAIAPIKey && openAIAPIKey.length) {
         try {
-          const aiLogDetails = await cozeChat(weekLogs);
+          const aiLogDetails = await openAIChat(weekLogs);
           if (aiLogDetails && aiLogDetails.length) {
             weekLogs = aiLogDetails;
           }
@@ -666,7 +665,7 @@
 
     // 创建设置项
     const settingItems = [
-      { key: 'cozeAccessToken', type: 'text', placeholder: '请输入 AI 密钥' },
+      { key: 'openAIAPIKey', type: 'text', placeholder: '请输入 AI 密钥' },
       { key: 'weekDailyLogStartDate', type: 'text', placeholder: '自动填充周志开始时间格式为 YYYY-MM-DD, 不填默认本周一' },
       { key: 'weekDailyLogEndDate', type: 'text', placeholder: '自动填充周志结束时间格式为 YYYY-MM-DD, 不填默认本周日' },
       { key: 'weekDailyLogYear', type: 'text', placeholder: '下载周志年份格式为 YYYY, 不填默认当前年份' },
@@ -1420,115 +1419,50 @@
     });
   }
 
-  /** 扣子对话 */
-  function cozeChat(message) {
+  /** OpenAI 对话 */
+  function openAIChat(message) {
     return new Promise(async (resolve, reject) => {
       if (!message || !message.length) {
         return reject('消息不能为空');
       }
-
       try {
-        // 获取 OA 授权, 作为 cozeUserId
-        if (!authorization || !authorization.length) {
-          const auth = await getAuthorization();
-          if (!auth || !auth.length) {
-            toast('获取授权失败');
-            reject('获取授权失败');
-          }
+        const apiKey = settings.openAIAPIKey;
+        if (!apiKey || !apiKey.length) {
+          return reject('API 密钥未配置');
         }
 
-        // 发起对话
-        const enterMessage = {
-          role: 'user',
-          content: message,
-          content_type: 'text',
-        };
-        let chatRes = await requestGM({
-          url: cozeChatUrl,
+        let systemPrompt = settings.systemPrompt;
+        if (!systemPrompt || !systemPrompt.length) {
+          systemPrompt = defaultSystemPrompt;
+        }
+
+        const chatRes = await requestGM({
+          url: `${openAIBaseURL}/v1/chat/completions`,
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + settings.cozeAccessToken,
+            Authorization: 'Bearer ' + apiKey,
           },
           data: {
-            bot_id: cozeBotId,
-            user_id: authorization,
-            additional_messages: [enterMessage],
+            model: openAIModel,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: message },
+            ],
           },
         });
-        log('【AI发起对话】', chatRes);
-        chatRes = JSON.parse(chatRes);
 
-        // 请求失败
-        if (chatRes.code !== 0) {
-          return reject(chatRes);
+        log('【OpenAI对话响应】', chatRes);
+        const chatData = JSON.parse(chatRes);
+
+        if (chatData.choices && chatData.choices.length) {
+          const content = chatData.choices[0].message.content || '';
+          resolve(content);
+        } else {
+          reject('对话返回结果异常');
         }
-
-        // 查询结果
-        const chatResponse = await cozeChatResponse(chatRes.data);
-        if (!chatResponse.data || !chatResponse.data.length) {
-          return reject('对话失败');
-        }
-
-        // 解析结果
-        const chatContent = chatResponse.data.find((item) => item.role === 'assistant' && item.type === 'answer');
-        let content = (chatContent.content || '').replaceAll('### ', '');
-
-        resolve(content);
       } catch (error) {
-        log('【AI发起对话失败】', error);
-        reject(error);
-      }
-    });
-  }
-
-  /** 扣子对话结果查询 */
-  function cozeChatResponse(chat) {
-    return new Promise(async (resolve, reject) => {
-      if (!chat || !chat.id || !chat.conversation_id) {
-        return reject('对话不能为空');
-      }
-      const { id, conversation_id } = chat;
-
-      const poll = () => {
-        return requestGM({
-          url: `${cozeRetrieveUrl}?conversation_id=${conversation_id}&chat_id=${id}`,
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + settings.cozeAccessToken,
-          },
-        });
-      };
-
-      try {
-        // 轮询对话状态
-        let chatRes = await poll();
-        log('【AI轮询对话状态】', chatRes);
-        chatRes = JSON.parse(chatRes);
-        while (chatRes.data.status !== 'completed') {
-          await new Promise((resolve) => setTimeout(resolve, 1000)); // 每1秒轮询一次
-          chatRes = await poll();
-          log('【AI轮询对话状态】', chatRes);
-          chatRes = JSON.parse(chatRes);
-        }
-
-        // 查询结果
-        let chatMessageRes = await requestGM({
-          url: `${cozeMessageUrl}?conversation_id=${conversation_id}&chat_id=${id}`,
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + settings.cozeAccessToken,
-          },
-        });
-        log('【AI查询对话结果】', chatMessageRes);
-        chatMessageRes = JSON.parse(chatMessageRes);
-        if (chatMessageRes.code !== 0) {
-          return reject(chatMessageRes);
-        }
-
-        resolve(chatMessageRes);
-      } catch (error) {
+        log('【OpenAI发起对话失败】', error);
         reject(error);
       }
     });
