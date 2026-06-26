@@ -28,23 +28,6 @@
   const holidayUrl = 'https://cdn.jsdelivr.net/npm/chinese-days/dist/chinese-days.json';
   const hitokotoUrl = 'https://v1.hitokoto.cn/?c=k&encode=text';
 
-  // 设置
-  const defaultSettings = {
-    openAIAPIKey: '', // OpenAI API 密钥
-    weekDailyLogYear: '', // 下载周志年份，格式为 YYYY
-    showDownloadWeekDailyLogBtn: false, // 显示下载周志记录按钮
-    weekDailyLogStartDate: '', // 自动填充周志开始时间，格式为 YYYY-MM-DD
-    weekDailyLogEndDate: '', // 自动填充周志结束时间，格式为 YYYY-MM-DD
-    aiFillWeeklyLog: true, // 自动填充周报记录时，是否使用 AI 整理
-    autoFillWeeklyLog: true, // 自动填充周报记录
-    autoFillDailyLog: true, // 自动填充日报记录
-    autoFillPlan: true, // 自动填充明日/下周工作计划
-    autoSelectReviewer: true, // 自动选择日报/周报抄送人和点评人
-    showStatisticsInfo: true, // 显示统计信息
-    showHitokoto: true, // 显示每日一言
-  };
-  let settings = { ...defaultSettings, ...getConfig('settings') };
-
   // 表单模板 ID
   const dailyTemplateId = '592233945022595072';
   const weekTemplateId = '592231167478988800';
@@ -60,9 +43,29 @@
   let statistics = {};
 
   // AI
-  const openAIBaseURL = 'https://opencode.ai/zen';
-  const openAIModel = 'deepseek-v4-flash-free';
-  const defaultSystemPrompt = '你是一名助理，负责整理工作日志。请将以下日志内容进行归纳总结，提取关键工作内容，使之更清晰、有条理。保持简洁，不要遗漏重要事项。';
+  const defaultOpenAIBaseURL = 'https://opencode.ai/zen';
+  const defaultOpenAIModel = 'deepseek-v4-flash-free';
+  const defaultLogSystemPrompt = '你是一名助理，负责整理工作日志。请将以下日志内容进行归纳总结，提取关键工作内容，使之更清晰、有条理。保持简洁，不要遗漏重要事项。';
+
+  // 设置
+  const defaultSettings = {
+    openAIBaseURL: defaultOpenAIBaseURL, // OpenAI API 基础 URL
+    openAIAPIKey: '', // OpenAI API 密钥
+    openAIModel: defaultOpenAIModel, // OpenAI 模型名称
+    logSystemPrompt: defaultLogSystemPrompt, // OpenAI 日志整理提示词
+    weekDailyLogYear: '', // 下载周志年份，格式为 YYYY
+    showDownloadWeekDailyLogBtn: false, // 显示下载周志记录按钮
+    weekDailyLogStartDate: '', // 自动填充周志开始时间，格式为 YYYY-MM-DD
+    weekDailyLogEndDate: '', // 自动填充周志结束时间，格式为 YYYY-MM-DD
+    aiFillWeeklyLog: true, // 自动填充周报记录时，是否使用 AI 整理
+    autoFillWeeklyLog: true, // 自动填充周报记录
+    autoFillDailyLog: true, // 自动填充日报记录
+    autoFillPlan: true, // 自动填充明日/下周工作计划
+    autoSelectReviewer: true, // 自动选择日报/周报抄送人和点评人
+    showStatisticsInfo: true, // 显示统计信息
+    showHitokoto: true, // 显示每日一言
+  };
+  let settings = { ...defaultSettings, ...getConfig('settings') };
 
   const pageSize = 200;
   let authorization = '';
@@ -665,7 +668,10 @@
 
     // 创建设置项
     const settingItems = [
+      { key: 'openAIBaseURL', type: 'text', placeholder: '请输入 AI 请求地址' },
       { key: 'openAIAPIKey', type: 'text', placeholder: '请输入 AI 密钥' },
+      { key: 'openAIModel', type: 'text', placeholder: '请输入 AI 模型名称' },
+      { key: 'logSystemPrompt', type: 'text', placeholder: '请输入 AI 日志整理提示词' },
       { key: 'weekDailyLogStartDate', type: 'text', placeholder: '自动填充周志开始时间格式为 YYYY-MM-DD, 不填默认本周一' },
       { key: 'weekDailyLogEndDate', type: 'text', placeholder: '自动填充周志结束时间格式为 YYYY-MM-DD, 不填默认本周日' },
       { key: 'weekDailyLogYear', type: 'text', placeholder: '下载周志年份格式为 YYYY, 不填默认当前年份' },
@@ -706,6 +712,12 @@
       title: '确认',
       type: 'primary',
       onClick: () => {
+        // 校验AI请求地址
+        const openAIBaseURL = settingItems.find((item) => item.key === 'openAIBaseURL')?.formItem?.value || '';
+        if (openAIBaseURL.length && !openAIBaseURL.startsWith('http')) {
+          toast('AI请求地址格式异常');
+          return;
+        }
         // 校验周志开始时间
         const weekDailyLogStartDate = settingItems.find((item) => item.key === 'weekDailyLogStartDate')?.formItem?.value || '';
         if (weekDailyLogStartDate.length && !isDateValid(weekDailyLogStartDate)) {
@@ -1431,20 +1443,33 @@
           return reject('API 密钥未配置');
         }
 
-        let systemPrompt = settings.systemPrompt;
-        if (!systemPrompt || !systemPrompt.length) {
-          systemPrompt = defaultSystemPrompt;
+        let baseUrl = settings.openAIBaseURL;
+        if (!baseUrl || !baseUrl.length || !baseUrl.startsWith('http')) {
+          baseUrl = defaultOpenAIBaseURL;
+        }
+        baseUrl = baseUrl.replace(/\/$/, '');
+
+        let model = settings.openAIModel;
+        if (!model || !model.length) {
+          model = defaultOpenAIModel;
         }
 
+        let systemPrompt = settings.logSystemPrompt;
+        if (!systemPrompt || !systemPrompt.length) {
+          systemPrompt = defaultLogSystemPrompt;
+        }
+
+        log('【OpenAI对话配置】', { baseUrl, model, apiKey, systemPrompt });
+
         const chatRes = await requestGM({
-          url: `${openAIBaseURL}/v1/chat/completions`,
+          url: `${baseUrl}/v1/chat/completions`,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: 'Bearer ' + apiKey,
           },
           data: {
-            model: openAIModel,
+            model,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: message },
