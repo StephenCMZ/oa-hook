@@ -638,100 +638,146 @@
     });
   }
 
+  /** 创建分组标题 */
+  function createGroupTitle(text) {
+    const groupTitle = document.createElement('div');
+    groupTitle.textContent = text;
+    groupTitle.style.cssText = 'font-size:13px;font-weight:600;color:#1890ff;padding:8px 0 4px;margin-top:6px;margin-bottom:4px;border-bottom:1px solid #f0f0f0;';
+    return groupTitle;
+  }
+
+  /** 创建设置行 */
+  function createSettingRow(label, element) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;';
+    const labelEl = document.createElement('span');
+    labelEl.textContent = label;
+    labelEl.style.cssText = 'font-size:13px;color:#333;white-space:nowrap;min-width:85px;text-align:right;';
+    row.appendChild(labelEl);
+    element.style.flex = '1';
+    row.appendChild(element);
+    return row;
+  }
+
   /** 设置弹窗 */
   function showSettings() {
     // 创建弹窗容器
-    const dialog = document.createElement('div');
-    dialog.style.position = 'fixed';
-    dialog.style.top = '50%';
-    dialog.style.left = '50%';
-    dialog.style.transform = 'translate(-50%, -50%)';
-    dialog.style.backgroundColor = 'white';
-    dialog.style.padding = '20px';
-    dialog.style.borderRadius = '4px';
-    dialog.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
-    dialog.style.minWidth = '500px';
-    dialog.style.zIndex = '9999';
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center;';
 
-    // 创建弹窗标题
-    const title = document.createElement('h2');
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'background:#fff;border-radius:8px;box-shadow:0 6px 30px rgba(0,0,0,.15);padding:24px;width:580px;max-height:80vh;overflow-y:auto;';
+
+    // 标题
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:18px;font-weight:600;color:#222;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #e8e8e8;';
     title.textContent = '设置';
-    title.style.marginTop = '0';
     dialog.appendChild(title);
 
-    // 创建输入框容器
-    const inputContainer = document.createElement('div');
-    inputContainer.style.display = 'flex';
-    inputContainer.style.flexDirection = 'column';
-    inputContainer.style.gap = '15px';
-    inputContainer.style.marginBottom = '20px';
-
-    // 创建设置项
-    const settingItems = [
-      { key: 'openAIBaseURL', type: 'text', placeholder: '请输入 AI 请求地址' },
-      { key: 'openAIAPIKey', type: 'text', placeholder: '请输入 AI 密钥' },
-      { key: 'openAIModel', type: 'text', placeholder: '请输入 AI 模型名称' },
-      { key: 'logSystemPrompt', type: 'text', placeholder: '请输入 AI 日志整理提示词' },
-      { key: 'weekDailyLogStartDate', type: 'text', placeholder: '自动填充周志开始时间格式为 YYYY-MM-DD, 不填默认本周一' },
-      { key: 'weekDailyLogEndDate', type: 'text', placeholder: '自动填充周志结束时间格式为 YYYY-MM-DD, 不填默认本周日' },
-      { key: 'weekDailyLogYear', type: 'text', placeholder: '下载周志年份格式为 YYYY, 不填默认当前年份' },
-      { key: 'autoFillDailyLog', type: 'checkbox', labelText: '自动填充日志' },
-      { key: 'autoFillWeeklyLog', type: 'checkbox', labelText: '自动填充周志' },
-      { key: 'aiFillWeeklyLog', type: 'checkbox', labelText: 'AI 整理周志' },
-      { key: 'autoFillPlan', type: 'checkbox', labelText: '自动填充计划' },
-      { key: 'autoSelectReviewer', type: 'checkbox', labelText: '自动选点评人' },
-      { key: 'showDownloadWeekDailyLogBtn', type: 'checkbox', labelText: '显示下载周志' },
-      { key: 'showStatisticsInfo', type: 'checkbox', labelText: '显示统计信息' },
-      { key: 'showHitokoto', type: 'checkbox', labelText: '显示每日一言' },
+    // 设置项分组
+    const groups = [
+      {
+        title: 'AI 配置',
+        items: [
+          { key: 'openAIBaseURL', type: 'text', label: '请求地址', placeholder: '请输入 AI 请求地址' },
+          { key: 'openAIAPIKey', type: 'text', label: 'API 密钥', placeholder: '请输入 AI 密钥' },
+          { key: 'openAIModel', type: 'text', label: '模型名称', placeholder: '请输入 AI 模型名称' },
+          { key: 'logSystemPrompt', type: 'text', label: '提示词', placeholder: '请输入 AI 日志整理提示词' },
+        ],
+      },
+      {
+        title: '自动填充',
+        items: [
+          { key: 'autoFillDailyLog', type: 'checkbox', label: '自动填充日志' },
+          { key: 'autoFillWeeklyLog', type: 'checkbox', label: '自动填充周志' },
+          { key: 'autoFillPlan', type: 'checkbox', label: '自动填充计划' },
+          { key: 'autoSelectReviewer', type: 'checkbox', label: '自动选点评人' },
+          { key: 'aiFillWeeklyLog', type: 'checkbox', label: 'AI 整理周志' },
+        ],
+      },
+      {
+        title: '填充周志时间范围',
+        items: [
+          { key: 'weekDailyLogStartDate', type: 'text', label: '开始时间', placeholder: '格式 YYYY-MM-DD，不填默认本周一' },
+          { key: 'weekDailyLogEndDate', type: 'text', label: '结束时间', placeholder: '格式 YYYY-MM-DD，不填默认本周日' },
+        ],
+      },
+      {
+        title: '批量周志下载',
+        items: [
+          { key: 'showDownloadWeekDailyLogBtn', type: 'checkbox', label: '显示下载周志' },
+          { key: 'weekDailyLogYear', type: 'text', label: '下载周志年份', placeholder: '格式 YYYY，不填默认当前年份' },
+        ],
+      },
+      {
+        title: '其他',
+        items: [
+          { key: 'showStatisticsInfo', type: 'checkbox', label: '显示统计信息' },
+          { key: 'showHitokoto', type: 'checkbox', label: '显示每日一言' },
+        ],
+      },
     ];
-    settingItems.forEach((item) => {
-      if (item.type === 'text') {
-        const { inputElement, input } = createInputElement({ placeholder: item.placeholder, value: settings[item.key] });
-        inputContainer.appendChild(inputElement);
-        item.formItem = input;
-      } else if (item.type === 'checkbox') {
-        const { checkboxElement, checkbox } = createCheckboxElement({ labelText: item.labelText, value: settings[item.key] });
-        inputContainer.appendChild(checkboxElement);
-        item.formItem = checkbox;
-      }
+
+    // 收集所有 formItem 引用，方便后续取值
+    const allItems = groups.flatMap((g) => g.items);
+
+    // 渲染每个分组
+    groups.forEach((group) => {
+      dialog.appendChild(createGroupTitle(group.title));
+
+      group.items.forEach((item) => {
+        if (item.type === 'text') {
+          const { inputElement, input } = createInputElement({ placeholder: item.placeholder, value: settings[item.key] });
+          const row = createSettingRow(item.label, inputElement);
+          dialog.appendChild(row);
+          item.formItem = input;
+        } else if (item.type === 'checkbox') {
+          const checkboxWrap = document.createElement('div');
+          checkboxWrap.style.cssText = 'display:flex;align-items:center;padding-left:9px;';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = settings[item.key] || false;
+          checkboxWrap.appendChild(checkbox);
+          const row = createSettingRow(item.label, checkboxWrap);
+          dialog.appendChild(row);
+          item.formItem = checkbox;
+        }
+      });
     });
-    dialog.appendChild(inputContainer);
 
-    // 创建按钮容器
+    // 按钮容器
     const btnContainer = document.createElement('div');
-    btnContainer.style.textAlign = 'right';
+    btnContainer.style.cssText = 'text-align:right;margin-top:20px;padding-top:12px;border-top:1px solid #f0f0f0;';
 
-    // 创建取消按钮
     const cancelBtn = createButtonElement({
       title: '取消',
-      onClick: () => document.body.removeChild(dialog),
+      onClick: () => document.body.removeChild(overlay),
     });
 
-    // 创建确认按钮
     const confirmBtn = createButtonElement({
       title: '确认',
       type: 'primary',
       onClick: () => {
         // 校验AI请求地址
-        const openAIBaseURL = settingItems.find((item) => item.key === 'openAIBaseURL')?.formItem?.value || '';
+        const openAIBaseURL = allItems.find((item) => item.key === 'openAIBaseURL')?.formItem?.value || '';
         if (openAIBaseURL.length && !openAIBaseURL.startsWith('http')) {
           toast('AI请求地址格式异常');
           return;
         }
         // 校验周志开始时间
-        const weekDailyLogStartDate = settingItems.find((item) => item.key === 'weekDailyLogStartDate')?.formItem?.value || '';
+        const weekDailyLogStartDate = allItems.find((item) => item.key === 'weekDailyLogStartDate')?.formItem?.value || '';
         if (weekDailyLogStartDate.length && !isDateValid(weekDailyLogStartDate)) {
           toast('周志开始时间格式异常');
           return;
         }
         // 校验周志结束时间
-        const weekDailyLogEndDate = settingItems.find((item) => item.key === 'weekDailyLogEndDate')?.formItem?.value || '';
+        const weekDailyLogEndDate = allItems.find((item) => item.key === 'weekDailyLogEndDate')?.formItem?.value || '';
         if (weekDailyLogEndDate.length && !isDateValid(weekDailyLogEndDate)) {
           toast('周志结束时间格式异常');
           return;
         }
         // 校验下载周志年份
-        const weekDailyLogYear = settingItems.find((item) => item.key === 'weekDailyLogYear')?.formItem?.value || '';
+        const weekDailyLogYear = allItems.find((item) => item.key === 'weekDailyLogYear')?.formItem?.value || '';
         if (weekDailyLogYear.length && !isYearValid(weekDailyLogYear)) {
           toast('周志年份格式异常');
           return;
@@ -739,7 +785,7 @@
 
         // 获取所有设置项的值
         const _settings = { ...settings };
-        settingItems.forEach((item) => {
+        allItems.forEach((item) => {
           if (item.type === 'text') {
             _settings[item.key] = item.formItem.value;
           } else if (item.type === 'checkbox') {
@@ -750,10 +796,10 @@
         // 保存设置
         settings = _settings;
         setConfig('settings', _settings);
-        console.log('保存设置:', _settings);
+        log('【保存设置】', _settings);
 
         // 关闭弹窗
-        document.body.removeChild(dialog);
+        document.body.removeChild(overlay);
         toast('保存成功, 请刷新页面生效');
       },
     });
@@ -762,7 +808,8 @@
     btnContainer.appendChild(confirmBtn);
     dialog.appendChild(btnContainer);
 
-    document.body.appendChild(dialog);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
   }
 
   /** 创建输入框 */
@@ -790,28 +837,6 @@
     inputElement.appendChild(input);
 
     return { inputElement, input };
-  }
-
-  /** 创建复选框 */
-  function createCheckboxElement({ labelText, value }) {
-    const checkboxElement = document.createElement('div');
-    checkboxElement.style.display = 'flex';
-    checkboxElement.style.alignItems = 'center';
-
-    if (labelText && labelText.trim() !== '') {
-      const label = document.createElement('label');
-      label.textContent = labelText;
-      label.style.fontSize = '14px';
-      label.style.marginRight = '8px';
-      checkboxElement.appendChild(label);
-    }
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = value || false;
-    checkboxElement.appendChild(checkbox);
-
-    return { checkboxElement, checkbox };
   }
 
   /** 创建按钮 */
