@@ -16,7 +16,6 @@
 (function () {
   'use strict';
 
-  const debug = false;
   const baseUrl = 'http://oa.gdytw.net';
   const getLinkPageUrl = '/api/Portal/Content/LinkGetPage';
   const logListUrl = '/api/Workflow/FlowList/GetRequireList';
@@ -45,7 +44,7 @@
   // AI
   const defaultOpenAIBaseURL = 'https://opencode.ai/zen';
   const defaultOpenAIModel = 'deepseek-v4-flash-free';
-  const defaultLogSystemPrompt = '你是一名助理，负责整理工作日志。请将以下日志内容进行归纳总结，提取关键工作内容，使之更清晰、有条理。保持简洁，不要遗漏重要事项。';
+  const defaultLogSystemPrompt = '你是一名助理，负责整理工作日志。请将以下日志内容进行归纳总结，提取关键工作内容，使之更清晰、有条理。保持简洁，不要遗漏重要事项，不要添加额外内容。';
 
   // 设置
   const defaultSettings = {
@@ -64,8 +63,13 @@
     autoSelectReviewer: true, // 自动选择日报/周报抄送人和点评人
     showStatisticsInfo: true, // 显示统计信息
     showHitokoto: true, // 显示每日一言
+    debug: false, // 调试模式
   };
   let settings = { ...defaultSettings, ...getConfig('settings') };
+  settings.openAIBaseURL = settings.openAIBaseURL?.trim().length ? settings.openAIBaseURL : defaultOpenAIBaseURL;
+  settings.openAIModel = settings.openAIModel?.trim().length ? settings.openAIModel : defaultOpenAIModel;
+  settings.logSystemPrompt = settings.logSystemPrompt?.trim().length ? settings.logSystemPrompt : defaultLogSystemPrompt;
+  log('【设置】', settings);
 
   const pageSize = 200;
   let authorization = '';
@@ -81,6 +85,7 @@
       guardAddElement(addSettingBtn); // 添加导航栏设置按钮
       guardAddElement(addExportBtn); // 添加导航栏导出按钮
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
+      guardAddElement(addAIWeekLogBtn); // 添加 AI 整理周志按钮
       guardFillEditForm(autoFillFormPlan, [dailyTemplateId, weekTemplateId, dailyVersionId, weekVersionId]); // 自动填充明日/下周工作计划
       guardFillEditForm(autoFillFormDailyLog, [dailyTemplateId, dailyVersionId]); // 自动填充日报记录
       guardFillEditForm(autoFillFormWeekLog, [weekTemplateId, weekVersionId]); // 自动填充周报记录
@@ -283,6 +288,41 @@
 
   /** =================================== 自动填充本周工作总结 ============================================ */
 
+  /** 添加 AI 整理周志按钮 */
+  function addAIWeekLogBtn() {
+    return new Promise(async (resolve) => {
+      // 检查是否开启 AI 整理周志
+      if (!settings.aiFillWeeklyLog) return resolve(true);
+
+      // 检查是否在周志表单页面
+      const formPage = [weekTemplateId, weekVersionId].some((id) => isFormPage(id));
+      if (!formPage) return resolve(true);
+
+      // 获取表单操作栏
+      const formFooterBar = getFormFooterBar();
+      if (!formFooterBar) return resolve(false);
+
+      // 添加 AI 生成周志按钮
+      const verifyOperators = formFooterBar.querySelector('#verify-operators');
+      if (!verifyOperators) return resolve(false);
+      const aiWeekLogBtn = document.createElement('button');
+      aiWeekLogBtn.classList.add('mr-sm', 'ant-btn', 'ant-btn-primary', 'ng-star-inserted');
+      aiWeekLogBtn.textContent = '重新生成周志';
+      aiWeekLogBtn.id = 'ai-week-log-btn';
+      aiWeekLogBtn.addEventListener('click', autoFillFormWeekLog);
+      verifyOperators.insertBefore(aiWeekLogBtn, verifyOperators.children[0]);
+    });
+  }
+
+  /** 更新 AI 整理周志按钮文本 */
+  function updateAIWeekLogBtnText(text, disabled = false) {
+    const aiWeekLogBtn = document.getElementById('ai-week-log-btn');
+    if (aiWeekLogBtn) {
+      aiWeekLogBtn.textContent = text;
+      aiWeekLogBtn.disabled = disabled;
+    }
+  }
+
   /** 自动填充表单本周工作总结 */
   function autoFillFormWeekLog() {
     return new Promise(async (resolve) => {
@@ -304,6 +344,9 @@
     if (!weekLogTextarea) return;
 
     try {
+      // 更新按钮状态
+      updateAIWeekLogBtnText('AI 生成中...', true);
+
       // 获取本周所有日志
       const logListRes = await getWeekDailyLogList();
       const logList = ((logListRes || {}).Data || {}).Data || [];
@@ -357,6 +400,9 @@
     } catch (error) {
       log('【本周工作总结】', '填充本周工作总结内容失败');
       toast('填充本周工作总结内容失败');
+    } finally {
+      // 更新按钮状态
+      updateAIWeekLogBtnText('重新生成周志');
     }
   }
 
@@ -714,6 +760,7 @@
         items: [
           { key: 'showStatisticsInfo', type: 'checkbox', label: '显示统计信息' },
           { key: 'showHitokoto', type: 'checkbox', label: '显示每日一言' },
+          { key: 'debug', type: 'checkbox', label: '调试模式' },
         ],
       },
     ];
@@ -1247,6 +1294,15 @@
     }
   }
 
+  /** 获取表单底部操作栏 */
+  function getFormFooterBar() {
+    const footer = document.querySelector('#workflow-footer');
+    if (!footer) return null;
+    const formFooter = footer.querySelector('.form-footer');
+    if (!formFooter) return null;
+    return formFooter.querySelector('.content');
+  }
+
   /** 获取配置 */
   function getConfig(key) {
     const config = GM_getValue('gdytw') || {};
@@ -1566,7 +1622,7 @@
 
   /** 日志 */
   function log(...args) {
-    if (debug) {
+    if (settings.debug) {
       console.log(...args);
     }
   }
