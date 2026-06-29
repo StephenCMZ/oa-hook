@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.8.3
+// @version      0.8.4
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -85,6 +85,7 @@
       guardAddElement(addSettingBtn); // 添加导航栏设置按钮
       guardAddElement(addExportBtn); // 添加导航栏导出按钮
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
+      guardAddElement(addAIDailyLogBtn); // 添加 AI 整理日志按钮
       guardAddElement(addAIWeekLogBtn); // 添加 AI 整理周志按钮
       guardFillEditForm(autoFillFormPlan, [dailyTemplateId, weekTemplateId, dailyVersionId, weekVersionId]); // 自动填充明日/下周工作计划
       guardFillEditForm(autoFillFormDailyLog, [dailyTemplateId, dailyVersionId]); // 自动填充日报记录
@@ -243,6 +244,80 @@
 
   /** =================================== 自动填充日工作总结 ============================================ */
 
+  /** 添加 AI 整理日志按钮 */
+  function addAIDailyLogBtn() {
+    return new Promise(async (resolve) => {
+      // 检查是否配置了 AI 密钥
+      if (!settings.openAIAPIKey || !settings.openAIAPIKey.trim().length) return resolve(true);
+
+      // 检查是否在日志表单页面
+      const formPage = [dailyTemplateId, dailyVersionId].some((id) => isFormPage(id));
+      if (!formPage) return resolve(true);
+
+      // 获取表单操作栏
+      const formFooterBar = getFormFooterBar();
+      if (!formFooterBar) return resolve(false);
+
+      // 添加 AI 生成日志按钮
+      const verifyOperators = formFooterBar.querySelector('#verify-operators');
+      if (!verifyOperators) return resolve(false);
+      const aiDailyLogBtn = document.createElement('button');
+      aiDailyLogBtn.classList.add('mr-sm', 'ant-btn', 'ant-btn-primary', 'ng-star-inserted');
+      aiDailyLogBtn.textContent = '润色日志';
+      aiDailyLogBtn.id = 'ai-daily-log-btn';
+      aiDailyLogBtn.addEventListener('click', aiReworkDailyLog);
+      verifyOperators.insertBefore(aiDailyLogBtn, verifyOperators.children[0]);
+    });
+  }
+
+  /** 更新 AI 整理日志按钮文本 */
+  function updateAIDailyLogBtnText(text, disabled = false) {
+    const aiDailyLogBtn = document.getElementById('ai-daily-log-btn');
+    if (!aiDailyLogBtn) return;
+    aiDailyLogBtn.textContent = text;
+    aiDailyLogBtn.disabled = disabled;
+  }
+
+  /** AI 润色日志 */
+  async function aiReworkDailyLog() {
+    // 获取今天工作总结输入框
+    const dailyLogTextarea = getPageFormTextarea(['今天工作总结']);
+    if (!dailyLogTextarea) {
+      toast('未找到今天工作总结输入框');
+      log('【日工作总结】', '未找到今天工作总结输入框');
+      return;
+    }
+
+    // 获取今日工作总结内容
+    const dailyLogContent = dailyLogTextarea.value;
+    if (!dailyLogContent || !dailyLogContent.trim().length) {
+      toast('请先输入今天工作总结内容');
+      log('【日工作总结】', '请先输入今天工作总结内容');
+      return;
+    }
+
+    try {
+      // 更新按钮状态
+      updateAIDailyLogBtnText('润色中...', true);
+
+      // 调用 AI 润色日志接口
+      const aiLogDetails = await openAIChat(dailyLogContent);
+      if (aiLogDetails && aiLogDetails.length) {
+        dailyLogTextarea.value = aiLogDetails;
+        toast('AI 润色成功');
+      } else {
+        toast('AI 润色失败');
+        log('【日工作总结】', 'AI 润色日志失败');
+      }
+    } catch (error) {
+      toast('AI 润色失败');
+      log('【日工作总结】', 'AI 润色日志失败');
+    } finally {
+      // 更新按钮状态
+      updateAIDailyLogBtnText('润色日志');
+    }
+  }
+
   /** 自动填充表单日工作总结 */
   function autoFillFormDailyLog() {
     return new Promise(async (resolve) => {
@@ -291,6 +366,9 @@
   /** 添加 AI 整理周志按钮 */
   function addAIWeekLogBtn() {
     return new Promise(async (resolve) => {
+      // 检查是否配置了 AI 密钥
+      if (!settings.openAIAPIKey || !settings.openAIAPIKey.trim().length) return resolve(true);
+
       // 检查是否开启 AI 整理周志
       if (!settings.aiFillWeeklyLog) return resolve(true);
 
@@ -317,10 +395,9 @@
   /** 更新 AI 整理周志按钮文本 */
   function updateAIWeekLogBtnText(text, disabled = false) {
     const aiWeekLogBtn = document.getElementById('ai-week-log-btn');
-    if (aiWeekLogBtn) {
-      aiWeekLogBtn.textContent = text;
-      aiWeekLogBtn.disabled = disabled;
-    }
+    if (!aiWeekLogBtn) return;
+    aiWeekLogBtn.textContent = text;
+    aiWeekLogBtn.disabled = disabled;
   }
 
   /** 自动填充表单本周工作总结 */
@@ -1275,7 +1352,7 @@
   /** 检查是否是管理页面，即非登录、注册等页面 */
   function isManagePage() {
     const pageUrl = window.location.href;
-    return pageUrl.includes('?q=') || pageUrl.includes('/auth-callback');
+    return !pageUrl.includes('/account/login') && !pageUrl.includes('/account/resetpwd') && !pageUrl.includes('/account/register') && !pageUrl.includes('/account/logout');
   }
 
   /** 获取导航栏 */
@@ -1330,14 +1407,23 @@
   /** 获取当前页面 URL */
   function getCurrentUrl() {
     const url = window.location.href;
-    if (!url || !url.length) return url;
+    if (!url || !url.length) {
+      log('【获取当前页面 URL】', url);
+      return url;
+    }
 
     const Q_PARAM = '?q=';
     const qIndex = url.indexOf(Q_PARAM);
-    if (qIndex === -1) return url;
+    if (qIndex === -1) {
+      log('【获取当前页面 URL】', url);
+      return url;
+    }
 
     const key = getURLPassword();
-    if (!key || !key.length) return url;
+    if (!key || !key.length) {
+      log('【获取当前页面 URL】', url);
+      return url;
+    }
 
     try {
       // 提取base64编码的加密数据（q=后面的部分）
