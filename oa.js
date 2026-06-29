@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.8.4
+// @version      0.8.5
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -36,6 +36,7 @@
   // 组件 ID
   const nav_setting_btn_id = 'setting_btn';
   const nav_export_btn_id = 'export_btn';
+  const nav_fireworks_btn_id = 'fireworks_btn';
   const nav_statistics_info_id = 'statistics_info';
 
   // 统计信息
@@ -63,6 +64,7 @@
     autoSelectReviewer: true, // 自动选择日报/周报抄送人和点评人
     showStatisticsInfo: true, // 显示统计信息
     showHitokoto: true, // 显示每日一言
+    showFireworks: true, // 显示假日烟花
     debug: false, // 调试模式
   };
   let settings = { ...defaultSettings, ...getConfig('settings') };
@@ -84,12 +86,14 @@
     window.addEventListener('load', function () {
       guardAddElement(addSettingBtn); // 添加导航栏设置按钮
       guardAddElement(addExportBtn); // 添加导航栏导出按钮
+      guardAddElement(addFireworksBtn); // 添加放烟花测试按钮
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
       guardAddElement(addAIDailyLogBtn); // 添加 AI 整理日志按钮
       guardAddElement(addAIWeekLogBtn); // 添加 AI 整理周志按钮
       guardFillEditForm(autoFillFormPlan, [dailyTemplateId, weekTemplateId, dailyVersionId, weekVersionId]); // 自动填充明日/下周工作计划
       guardFillEditForm(autoFillFormDailyLog, [dailyTemplateId, dailyVersionId]); // 自动填充日报记录
       guardFillEditForm(autoFillFormWeekLog, [weekTemplateId, weekVersionId]); // 自动填充周报记录
+      checkAndShowFireworks(); // 节假日烟花
     });
   }
 
@@ -528,6 +532,14 @@
     return regex.test(yearString);
   }
 
+  // 格式化日期为 YYYY-MM-DD
+  function formatDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   /** =================================== 自动选择日报/周报抄送人和点评人 ============================================ */
 
   /** 自动选择日报/周报抄送人和点评人 */
@@ -837,6 +849,7 @@
         items: [
           { key: 'showStatisticsInfo', type: 'checkbox', label: '显示统计信息' },
           { key: 'showHitokoto', type: 'checkbox', label: '显示每日一言' },
+          { key: 'showFireworks', type: 'checkbox', label: '显示假日烟花' },
           { key: 'debug', type: 'checkbox', label: '调试模式' },
         ],
       },
@@ -1265,6 +1278,454 @@
     if (statisticsDetailInfo) {
       statisticsButton.removeChild(statisticsDetailInfo);
     }
+  }
+
+  /** =================================== 节假日烟花 ============================================ */
+
+  /** 添加放烟花测试按钮 */
+  function addFireworksBtn() {
+    return new Promise((resolve) => {
+      if (!settings.debug) return resolve(true);
+
+      var { navBar, exists } = hasNavBarItem(nav_fireworks_btn_id);
+      if (!navBar || exists) return resolve(exists);
+
+      var liItem = document.createElement('li');
+      liItem.id = nav_fireworks_btn_id;
+      liItem.className = 'ng-star-inserted';
+      liItem.style = 'display: inline-block; vertical-align: middle;';
+
+      var fireworksButton = document.createElement('button');
+      fireworksButton.textContent = '放烟花';
+      fireworksButton.style.backgroundColor = 'transparent';
+      fireworksButton.style.color = 'white';
+      fireworksButton.style.border = 'none';
+      fireworksButton.style.textAlign = 'center';
+      fireworksButton.style.textDecoration = 'none';
+      fireworksButton.style.display = 'inline-block';
+      fireworksButton.style.fontSize = '14px';
+      fireworksButton.style.cursor = 'pointer';
+
+      fireworksButton.onmouseover = function () {
+        fireworksButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
+      };
+      fireworksButton.onmouseout = function () {
+        fireworksButton.style.backgroundColor = 'transparent';
+      };
+
+      fireworksButton.onclick = function () {
+        startFireworks('节日快乐');
+      };
+
+      liItem.appendChild(fireworksButton);
+      navBar.insertBefore(liItem, navBar.firstChild);
+
+      resolve(true);
+    });
+  }
+
+  /** 检查并播放烟花 */
+  async function checkAndShowFireworks() {
+    if (!settings.showFireworks) return;
+
+    const currentUrl = getCurrentUrl();
+    if (!currentUrl || !currentUrl.includes('/portal/index')) return;
+
+    const today = new Date();
+    const todayStr = formatDate(today);
+    const dayOfWeek = today.getDay();
+
+    let greeting = '';
+    let holidayData = null;
+
+    // 获取节假日数据
+    try {
+      const res = await requestGM({ url: holidayUrl, method: 'GET' });
+      holidayData = JSON.parse(res || '{}');
+    } catch (e) {
+      log('【烟花】', '获取节假日数据失败', e);
+    }
+
+    if (holidayData) {
+      const holidays = holidayData.holidays || {};
+      const workdays = holidayData.workdays || {};
+
+      // 节假日当天
+      if (holidays[todayStr]) {
+        const holidayType = holidays[todayStr].split(',') || [];
+        const holidayName = holidayType[1] || holidayType[0] || '';
+        if (holidayName) {
+          greeting = `${holidayName}快乐`;
+        }
+      }
+
+      // 周末（排除调休上班日）
+      if (!greeting && (dayOfWeek === 0 || dayOfWeek === 6) && !workdays[todayStr]) {
+        greeting = '周末快乐';
+      }
+
+      // 节假日放假前的最后一个工作日
+      if (!greeting) {
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = formatDate(tomorrow);
+        const tomorrowDayOfWeek = tomorrow.getDay();
+        if (holidays[tomorrowStr]) {
+          // 明天是法定节假日
+          const holidayType = holidays[tomorrowStr].split(',') || [];
+          const holidayName = holidayType[1] || holidayType[0] || '';
+          if (holidayName) {
+            greeting = `${holidayName}快乐`;
+          }
+        } else if ((tomorrowDayOfWeek === 0 || tomorrowDayOfWeek === 6) && !workdays[tomorrowStr]) {
+          // 明天是周末（非调休上班日）
+          greeting = '周末快乐';
+        }
+      }
+    } else if (dayOfWeek === 0 || dayOfWeek === 6) {
+      // 获取节假日数据失败时，仅检测周末
+      greeting = '周末快乐';
+    }
+
+    if (greeting) {
+      setTimeout(() => startFireworks(greeting), 500);
+    }
+  }
+
+  /** 播放烟花动画 */
+  function startFireworks(text) {
+    // 创建全屏容器
+    const container = document.createElement('div');
+    container.id = 'fireworks-container';
+    container.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;pointer-events:none;';
+
+    const canvas = document.createElement('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.cssText = 'display:block;';
+    container.appendChild(canvas);
+    document.body.appendChild(container);
+
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    const startTime = Date.now();
+    const duration = 14000;
+    const colors = ['#ff0000', '#ff7700', '#ffff00', '#00ff00', '#00bfff', '#ff00ff', '#ffd700', '#ff1493', '#ff4500'];
+
+    // ========== 文字粒子 ==========
+
+    /** 获取文字像素位置 */
+    function getTextPixels(text, maxW, maxH) {
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = Math.ceil(maxW);
+      offCanvas.height = Math.ceil(maxH);
+      const offCtx = offCanvas.getContext('2d');
+
+      let fontSize = 110;
+      offCtx.textAlign = 'center';
+      offCtx.textBaseline = 'middle';
+      offCtx.font = `bold ${fontSize}px "Microsoft YaHei","PingFang SC",sans-serif`;
+
+      while (offCtx.measureText(text).width > maxW * 0.9 && fontSize > 20) {
+        fontSize -= 2;
+        offCtx.font = `bold ${fontSize}px "Microsoft YaHei","PingFang SC",sans-serif`;
+      }
+
+      offCtx.fillStyle = '#fff';
+      offCtx.fillText(text, offCanvas.width / 2, offCanvas.height / 2);
+
+      const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height);
+      const pixels = [];
+      const step = 3;
+      const cx = offCanvas.width / 2;
+      const cy = offCanvas.height / 2;
+
+      for (let y = 0; y < offCanvas.height; y += step) {
+        for (let x = 0; x < offCanvas.width; x += step) {
+          if (imageData.data[(y * offCanvas.width + x) * 4 + 3] > 128) {
+            pixels.push({ x: x - cx, y: y - cy });
+          }
+        }
+      }
+      return pixels;
+    }
+
+    const textPixels = getTextPixels(text, W * 0.85, 160);
+    const textParticles = textPixels.map((p) => ({
+      homeX: W / 2 + p.x,
+      homeY: H / 2 + p.y,
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: 0,
+      vy: 0,
+      alpha: 1,
+      size: 1.5 + Math.random() * 1.5,
+      hue: Math.floor(Math.random() * 360), // 彩色
+    }));
+
+    // ========== 背景烟花粒子 ==========
+
+    const bgParticles = [];
+    const rockets = [];
+    const confetti = [];
+
+    function launchRocket() {
+      const x = Math.random() * W * 0.8 + W * 0.1;
+      const targetY = Math.random() * H * 0.35 + H * 0.1;
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      rockets.push({ x, y: H, targetY, speed: 5 + Math.random() * 5, color, trail: [] });
+    }
+
+    function explodeRocket(x, y, color) {
+      const count = 50 + Math.floor(Math.random() * 50);
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 5 + 2;
+        bgParticles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          color: Math.random() > 0.3 ? color : colors[Math.floor(Math.random() * colors.length)],
+          alpha: 1,
+          size: 1.5 + Math.random() * 2.5,
+          decay: 0.008 + Math.random() * 0.015,
+          gravity: 0.04,
+        });
+      }
+    }
+
+    function hexToRgb(hex) {
+      return `${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)}`;
+    }
+
+    /** 生成彩带 */
+    function spawnConfetti(count = 10) {
+      const confettiColors = ['#ff0000', '#ff7700', '#ffff00', '#00ff00', '#00bfff', '#ff00ff', '#ffd700', '#ff1493', '#ff4500', '#7cfc00', '#00ffff'];
+      for (let i = 0; i < count; i++) {
+        confetti.push({
+          x: Math.random() * W,
+          y: -10 - Math.random() * 20,
+          w: 4 + Math.random() * 8,
+          h: 2 + Math.random() * 4,
+          color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+          vx: (Math.random() - 0.5) * 1.5,
+          vy: 1 + Math.random() * 2.5,
+          rot: Math.random() * Math.PI * 2,
+          rotSpeed: (Math.random() - 0.5) * 0.1,
+          swing: (Math.random() - 0.5) * 0.5,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.7 + Math.random() * 0.3,
+        });
+      }
+    }
+
+    // ========== 文字粒子相位控制 ==========
+
+    let phase = 'form'; // form → hold → explode → form → hold → explode → fade
+    let phaseStart = Date.now();
+    const phaseTimes = { form: 1800, hold: 2000, explode: 1600 };
+    let cycleCount = 0;
+    const maxCycles = 2;
+    let lastLaunch = 0;
+    let fading = false;
+
+    function resetParticlesForReform() {
+      textParticles.forEach((p) => {
+        p.x = Math.random() * W;
+        p.y = Math.random() * H;
+        p.vx = 0;
+        p.vy = 0;
+        p.alpha = 1;
+      });
+    }
+
+    function animate() {
+      const elapsed = Date.now() - startTime;
+
+      // 超时淡出
+      if (elapsed > duration && !fading) {
+        fading = true;
+        container.style.opacity = '0';
+        container.style.transition = 'opacity 1.5s ease';
+        setTimeout(() => {
+          if (document.body.contains(container)) document.body.removeChild(container);
+        }, 1500);
+      }
+
+      // 相位切换
+      const phaseElapsed = Date.now() - phaseStart;
+      if (!fading && phaseElapsed > phaseTimes[phase]) {
+        if (phase === 'form') {
+          phase = 'hold';
+          phaseStart = Date.now();
+        } else if (phase === 'hold') {
+          phase = 'explode';
+          phaseStart = Date.now();
+          textParticles.forEach((p) => {
+            const angle = Math.atan2(p.homeY - H / 2, p.homeX - W / 2) + (Math.random() - 0.5) * 0.5;
+            const speed = 6 + Math.random() * 10;
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+          });
+        } else if (phase === 'explode') {
+          cycleCount++;
+          if (cycleCount >= maxCycles) {
+            fading = true;
+            container.style.opacity = '0';
+            container.style.transition = 'opacity 1.5s ease';
+            setTimeout(() => {
+              if (document.body.contains(container)) document.body.removeChild(container);
+            }, 1500);
+          } else {
+            phase = 'form';
+            phaseStart = Date.now();
+            resetParticlesForReform();
+          }
+        }
+      }
+
+      // ----- 更新文字粒子 -----
+      if (phase === 'form') {
+        textParticles.forEach((p) => {
+          const dx = p.homeX - p.x;
+          const dy = p.homeY - p.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 1) {
+            const force = Math.min(0.08, (1 / (dist * 0.01 + 1)) * 0.06);
+            p.vx += dx * force;
+            p.vy += dy * force;
+          }
+          p.vx *= 0.88;
+          p.vy *= 0.88;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.alpha = Math.min(1, p.alpha + 0.02);
+        });
+      } else if (phase === 'hold') {
+        textParticles.forEach((p) => {
+          p.x = p.homeX + (Math.random() - 0.5) * 1.5;
+          p.y = p.homeY + (Math.random() - 0.5) * 1.5;
+          p.alpha = 0.85 + Math.random() * 0.15;
+        });
+      } else if (phase === 'explode') {
+        textParticles.forEach((p) => {
+          p.vx *= 0.97;
+          p.vy *= 0.97;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += 0.05;
+          p.alpha = Math.max(0, 1 - (Date.now() - phaseStart) / phaseTimes.explode);
+        });
+      }
+
+      // ----- 更新背景烟花 & 彩带 -----
+      if (!fading && elapsed - lastLaunch > 300 + Math.random() * 500) {
+        launchRocket();
+        lastLaunch = elapsed;
+        if (Math.random() > 0.5) setTimeout(launchRocket, 100 + Math.random() * 200);
+      }
+
+      // 持续生成彩带
+      if (!fading && Math.random() > 0.85) {
+        spawnConfetti(3 + Math.floor(Math.random() * 5));
+      }
+
+      for (let i = rockets.length - 1; i >= 0; i--) {
+        const r = rockets[i];
+        r.y -= r.speed;
+        r.trail.push({ x: r.x, y: r.y });
+        if (r.trail.length > 12) r.trail.shift();
+        if (r.y <= r.targetY) {
+          explodeRocket(r.x, r.y, r.color);
+          rockets.splice(i, 1);
+        }
+      }
+
+      for (let i = bgParticles.length - 1; i >= 0; i--) {
+        const p = bgParticles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.vx *= 0.98;
+        p.alpha -= p.decay;
+        if (p.alpha <= 0) bgParticles.splice(i, 1);
+      }
+
+      // 更新彩带
+      for (let i = confetti.length - 1; i >= 0; i--) {
+        const c = confetti[i];
+        c.x += c.vx + Math.sin(c.phase) * c.swing;
+        c.y += c.vy;
+        c.rot += c.rotSpeed;
+        c.phase += 0.02;
+        if (c.y > H + 20) confetti.splice(i, 1);
+      }
+
+      // ----- 绘制 -----
+      ctx.clearRect(0, 0, W, H);
+
+      // 火箭尾迹
+      rockets.forEach((r) => {
+        for (let i = 0; i < r.trail.length; i++) {
+          const a = (i / r.trail.length) * 0.8;
+          ctx.beginPath();
+          ctx.arc(r.trail[i].x, r.trail[i].y, 2 * (i / r.trail.length), 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,255,255,${a})`;
+          ctx.fill();
+        }
+      });
+
+      // 背景烟花粒子
+      bgParticles.forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * p.alpha, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${hexToRgb(p.color)},${Math.max(0, p.alpha * 0.6)})`;
+        ctx.fill();
+      });
+
+      // 绘制彩带
+      confetti.forEach((c) => {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.rot);
+        ctx.globalAlpha = c.alpha;
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
+        ctx.restore();
+      });
+
+      // 文字粒子（带发光效果）
+      textParticles.forEach((p) => {
+        if (p.alpha <= 0.01) return;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * Math.max(0.3, p.alpha), 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue},100%,60%,${Math.max(0, p.alpha * 0.9)})`;
+        ctx.fill();
+        if (p.alpha > 0.5) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 2.5 * p.alpha, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue},100%,70%,${Math.max(0, p.alpha * 0.15)})`;
+          ctx.fill();
+        }
+      });
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+
+    // 点击关闭
+    container.style.pointerEvents = 'auto';
+    container.addEventListener('click', () => {
+      if (!document.body.contains(container)) return;
+      container.style.opacity = '0';
+      container.style.transition = 'opacity 0.5s ease';
+      setTimeout(() => {
+        if (document.body.contains(container)) document.body.removeChild(container);
+      }, 500);
+    });
   }
 
   /** =================================== 表单工具 ============================================ */
