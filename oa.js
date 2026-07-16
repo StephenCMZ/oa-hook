@@ -31,7 +31,11 @@
   const dailyTemplateId = '592233945022595072';
   const weekTemplateId = '592231167478988800';
   const dailyVersionId = '1058193287577341952';
+  const dailyVersionId2 = '1124298401509330944';
   const weekVersionId = '1058204181233405952';
+  const weekVersionId2 = '1124501387795812352';
+  const dailyFormPageIds = [dailyTemplateId, dailyVersionId, dailyVersionId2];
+  const weekFormPageIds = [weekTemplateId, weekVersionId, weekVersionId2];
 
   // 组件 ID
   const nav_setting_btn_id = 'setting_btn';
@@ -93,9 +97,9 @@
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
       guardAddElement(addAIDailyLogBtn); // 添加 AI 整理日志按钮
       guardAddElement(addAIWeekLogBtn); // 添加 AI 整理周志按钮
-      guardFillEditForm(autoFillFormPlan, [dailyTemplateId, weekTemplateId, dailyVersionId, weekVersionId]); // 自动填充明日/下周工作计划
-      guardFillEditForm(autoFillFormDailyLog, [dailyTemplateId, dailyVersionId]); // 自动填充日报记录
-      guardFillEditForm(autoFillFormWeekLog, [weekTemplateId, weekVersionId]); // 自动填充周报记录
+      guardFillEditForm(autoFillFormPlan, [...dailyFormPageIds, ...weekFormPageIds]); // 自动填充明日/下周工作计划
+      guardFillEditForm(autoFillFormDailyLog, dailyFormPageIds); // 自动填充日报记录
+      guardFillEditForm(autoFillFormWeekLog, weekFormPageIds); // 自动填充周报记录
       checkAndShowFireworks(); // 节假日烟花
     });
   }
@@ -258,7 +262,7 @@
       if (!settings.openAIAPIKey || !settings.openAIAPIKey.trim().length) return resolve(true);
 
       // 检查是否在日志表单页面
-      const formPage = [dailyTemplateId, dailyVersionId].some((id) => isFormPage(id));
+      const formPage = dailyFormPageIds.some((id) => isFormPage(id));
       if (!formPage) return resolve(true);
 
       // 获取表单操作栏
@@ -380,7 +384,7 @@
       if (!settings.aiFillWeeklyLog) return resolve(true);
 
       // 检查是否在周志表单页面
-      const formPage = [weekTemplateId, weekVersionId].some((id) => isFormPage(id));
+      const formPage = weekFormPageIds.some((id) => isFormPage(id));
       if (!formPage) return resolve(true);
 
       // 获取表单操作栏
