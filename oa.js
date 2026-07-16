@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.8.5
+// @version      0.8.6
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -65,12 +65,15 @@
     showStatisticsInfo: true, // 显示统计信息
     showHitokoto: true, // 显示每日一言
     showFireworks: true, // 显示假日烟花
+    showFireworksBtn: false, // 显示放烟花按钮
+    fireworksText: '节日快乐', // 放烟花按钮文本
     debug: false, // 调试模式
   };
   let settings = { ...defaultSettings, ...getConfig('settings') };
   settings.openAIBaseURL = settings.openAIBaseURL?.trim().length ? settings.openAIBaseURL : defaultOpenAIBaseURL;
   settings.openAIModel = settings.openAIModel?.trim().length ? settings.openAIModel : defaultOpenAIModel;
   settings.logSystemPrompt = settings.logSystemPrompt?.trim().length ? settings.logSystemPrompt : defaultLogSystemPrompt;
+  settings.fireworksText = settings.fireworksText?.trim().length ? settings.fireworksText : defaultSettings.fireworksText;
   log('【设置】', settings);
 
   const pageSize = 200;
@@ -86,7 +89,7 @@
     window.addEventListener('load', function () {
       guardAddElement(addSettingBtn); // 添加导航栏设置按钮
       guardAddElement(addExportBtn); // 添加导航栏导出按钮
-      guardAddElement(addFireworksBtn); // 添加放烟花测试按钮
+      guardAddElement(addFireworksBtn); // 添加放烟花按钮
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
       guardAddElement(addAIDailyLogBtn); // 添加 AI 整理日志按钮
       guardAddElement(addAIWeekLogBtn); // 添加 AI 整理周志按钮
@@ -850,6 +853,7 @@
           { key: 'showStatisticsInfo', type: 'checkbox', label: '显示统计信息' },
           { key: 'showHitokoto', type: 'checkbox', label: '显示每日一言' },
           { key: 'showFireworks', type: 'checkbox', label: '显示假日烟花' },
+          { key: 'showFireworksBtn', type: 'checkbox', label: '显示放烟花' },
           { key: 'debug', type: 'checkbox', label: '调试模式' },
         ],
       },
@@ -1282,10 +1286,10 @@
 
   /** =================================== 节假日烟花 ============================================ */
 
-  /** 添加放烟花测试按钮 */
+  /** 添加放烟花按钮 */
   function addFireworksBtn() {
     return new Promise((resolve) => {
-      if (!settings.debug) return resolve(true);
+      if (!settings.showFireworksBtn) return resolve(true);
 
       var { navBar, exists } = hasNavBarItem(nav_fireworks_btn_id);
       if (!navBar || exists) return resolve(exists);
@@ -1314,7 +1318,12 @@
       };
 
       fireworksButton.onclick = function () {
-        startFireworks('节日快乐');
+        startFireworks(settings.fireworksText || defaultSettings.fireworksText);
+      };
+
+      fireworksButton.oncontextmenu = function (e) {
+        e.preventDefault();
+        showFireworksTextDialog();
       };
 
       liItem.appendChild(fireworksButton);
@@ -1324,12 +1333,65 @@
     });
   }
 
+  /** 设置烟花文案弹窗 */
+  function showFireworksTextDialog() {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center;';
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'background:#fff;border-radius:8px;box-shadow:0 6px 30px rgba(0,0,0,.15);padding:24px;width:400px;';
+
+    const title = document.createElement('div');
+    title.style.cssText = 'font-size:16px;font-weight:600;color:#222;margin-bottom:16px;';
+    title.textContent = '设置烟花文案';
+    dialog.appendChild(title);
+
+    const { inputElement, input } = createInputElement({ placeholder: '请输入烟花文案', value: settings.fireworksText });
+    dialog.appendChild(inputElement);
+
+    const btnContainer = document.createElement('div');
+    btnContainer.style.cssText = 'text-align:right;margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;';
+
+    const cancelBtn = createButtonElement({
+      title: '取消',
+      onClick: () => document.body.removeChild(overlay),
+    });
+
+    const confirmBtn = createButtonElement({
+      title: '确认',
+      type: 'primary',
+      onClick: () => {
+        const text = input.value.trim();
+        if (!text) {
+          toast('文案不能为空');
+          return;
+        }
+        const _settings = { ...settings };
+        _settings.fireworksText = text;
+        settings = _settings;
+        setConfig('settings', _settings);
+        document.body.removeChild(overlay);
+        toast('保存成功');
+      },
+    });
+
+    btnContainer.appendChild(cancelBtn);
+    btnContainer.appendChild(confirmBtn);
+    dialog.appendChild(btnContainer);
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    input.focus();
+    input.select();
+  }
+
   /** 检查并播放烟花 */
   async function checkAndShowFireworks() {
     if (!settings.showFireworks) return;
 
     const currentUrl = getCurrentUrl();
-    if (!currentUrl || !currentUrl.includes('/portal/index')) return;
+    if (!currentUrl || (!currentUrl.includes('/portal/index') && !currentUrl.includes('/auth-callback'))) return;
 
     const today = new Date();
     const todayStr = formatDate(today);
@@ -1398,6 +1460,9 @@
     const container = document.createElement('div');
     container.id = 'fireworks-container';
     container.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;pointer-events:none;';
+    container.oncontextmenu = function (e) {
+      e.preventDefault();
+    };
 
     const canvas = document.createElement('canvas');
     canvas.width = window.innerWidth;
