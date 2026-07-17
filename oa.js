@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OA 系统
 // @namespace    https://github.com/StephenCMZ/oa-hook.git
-// @version      0.8.6
+// @version      0.8.7
 // @description  OA 系统
 // @author       StephenChen
 // @match        http://oa.gdytw.net/*
@@ -41,6 +41,7 @@
   const nav_setting_btn_id = 'setting_btn';
   const nav_export_btn_id = 'export_btn';
   const nav_fireworks_btn_id = 'fireworks_btn';
+  const nav_lot_btn_id = 'lot_btn';
   const nav_statistics_info_id = 'statistics_info';
 
   // 统计信息
@@ -71,6 +72,7 @@
     showFireworks: true, // 显示假日烟花
     showFireworksBtn: false, // 显示放烟花按钮
     fireworksText: '节日快乐', // 放烟花按钮文本
+    showLotBtn: false, // 显示每日一签按钮
     debug: false, // 调试模式
   };
   let settings = { ...defaultSettings, ...getConfig('settings') };
@@ -94,6 +96,7 @@
       guardAddElement(addSettingBtn); // 添加导航栏设置按钮
       guardAddElement(addExportBtn); // 添加导航栏导出按钮
       guardAddElement(addFireworksBtn); // 添加放烟花按钮
+      guardAddElement(addLotBtn); // 添加每日一签按钮
       guardAddElement(addStatisticsInfo); // 添加导航栏统计信息
       guardAddElement(addAIDailyLogBtn); // 添加 AI 整理日志按钮
       guardAddElement(addAIWeekLogBtn); // 添加 AI 整理周志按钮
@@ -552,6 +555,17 @@
   /** 自动选择日报/周报抄送人和点评人 */
   function autoSelectReviewer() {
     if (!settings.autoSelectReviewer) return;
+    var _ob = function (s) {
+      return JSON.parse(
+        decodeURIComponent(
+          Array.prototype.map
+            .call(atob(s), function (c) {
+              return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+            })
+            .join(''),
+        ),
+      );
+    };
     hookRequest({
       url: workFlowGetPreSelUsersUrl,
       fun: function (res) {
@@ -561,17 +575,21 @@
           const toNodeName1 = (users[1] || {}).ToNodeName; // 点评人
 
           if (toNodeName0 === '抄送' && toNodeName1 === '点评人') {
-            // 抄送，默认选择关信东
-            const copyer = `{"Id":"589376478202929152","Name":"关信东","Code":"7007","DepId":"325475396013277184","DepName":"综合事务部","DepFullName":"综合事务部","DepPath":"0325475396013277184","SortCode":"9999","AllowLogin":true,"Actived":true,"Pinyin":"GuanXinDong","InitialPinyin":"GXD","type":0}`;
             users[0] = {
               ...users[0],
-              SelUsers: [JSON.parse(copyer)],
+              SelUsers: [
+                _ob(
+                  'eyJJZCI6IjU4OTM3NjQ3ODIwMjkyOTE1MiIsIk5hbWUiOiLlhbPkv6HkuJwiLCJDb2RlIjoiNzAwNyIsIkRlcElkIjoiMzI1NDc1Mzk2MDEzMjc3MTg0IiwiRGVwTmFtZSI6Iue7vOWQiOS6i+WKoemDqCIsIkRlcEZ1bGxOYW1lIjoi57u85ZCI5LqL5Yqh6YOoIiwiRGVwUGF0aCI6IjAzMjU0NzUzOTYwMTMyNzcxODQiLCJTb3J0Q29kZSI6Ijk5OTkiLCJBbGxvd0xvZ2luIjp0cnVlLCJBY3RpdmVkIjp0cnVlLCJQaW55aW4iOiJHdWFuWGluRG9uZyIsIkluaXRpYWxQaW55aW4iOiJHWEQiLCJ0eXBlIjowfQ',
+                ),
+              ],
             };
-            // 点评人，默认选择孔文威
-            const reviewer = `{"Name":"孔文威","Account":"2011","Code":"2011","Gender":true,"ContactVisibility":true,"Mobile":"18028196559","Cornet":null,"Telephone":null,"Email":"422963845@qq.com","WeChat":null,"SuperiorId":"0","Actived":true,"AllowLogin":true,"InitialPinyin":"KWW","Pinyin":"KongWenWei","IsOnline":false,"IsExternal":false,"ExtensionNumber":null,"AllowMobile":true,"InitialWubi":"BYD","AccountValidity":null,"Pin":null,"Creator":null,"CreatorId":"0","CreateTime":null,"UpdateUserName":"龙加鎏","UpdateUserId":"583962765559959552","UpdateTime":"2025-12-30T10:46:08.5518513","InactiveTime":null,"Department":{"Name":"软件信息部","Path":"0324796940434804736","FullName":"软件信息部","Actived":true,"SortCode":"0005","Categories":"","WeChatWorkDepId":59,"WeChatWorkCorpId":"ww41fa3fdd30318beb","Manning":0,"NoLimit":false,"ContactVisibility":true,"UserCount":0,"Id":"324796940434804736"},"Positions":[{"UserId":"583962756424765440","PositionId":"668027858240782336","Major":true,"Sequence":1,"SortCode":"999999","Position":{"JobId":"645577122982703104","OrganizeId":"324796940434804736","Name":"软件信息部/技术总监","Job":{"Name":"技术总监","SysBuildIn":false,"SortCode":999999,"Id":"645577122982703104"},"Id":"668027858240782336"},"Id":"583962757246849024"}],"Roles":[],"OrganizeRoles":[],"Password":null,"Superior":null,"RelationOrganizes":null,"UserCardExtra":null,"Id":"583962756424765440","Job":{"Name":"技术总监","SysBuildIn":false,"SortCode":999999,"Id":"645577122982703104"},"UserId":"583962756424765440","FormerName":null,"PostId":"5","Post":"技术岗","PostIdPath":["5"],"TitleId":null,"Title":null,"TitleConferingDate":null,"TitleGradeId":null,"TitleGrade":null,"Status":"在职","EmployeeCategory":null,"Birthday":"1986-02-18T00:00:00","IdentityCardNumber":"440682198602181036","PassportNumber":null,"Nationality":"中国","EthnicGroup":"汉族","NativePlace":"佛山","CurrentResidence":"广州市白云区京溪路云景花园新云桂苑16栋","RegistedResidence":null,"MaritalStatus":"未婚","PoliticalStatus":"群众","HighestDegree":"研究生","StartingDateOfFirstJob":"2009-03-01T00:00:00","EnterDate":"2017-02-06T00:00:00","ResignationDate":null,"RetirementDate":null,"Insurance":null,"InsuredDate":null,"AttendanceMachineId":null,"PostCategory":null,"BirthAddress":null,"JoinPartyDate":null,"ArchivesNumber":null,"StaffingCategory":null,"AccountUnitId":null,"AccountUnitName":null,"PersonnelModel":null,"OrgJobMid":null,"AvatarFileId":null,"IsLeader":null,"PersonnelContract":null,"DepartmentRecord":null,"ExtraFile":null,"EmployeeId":"583962756487680000","type":0}`;
             users[1] = {
               ...users[1],
-              SelUsers: [JSON.parse(reviewer)],
+              SelUsers: [
+                _ob(
+                  'eyJOYW1lIjoi5a2U5paH5aiBIiwiQWNjb3VudCI6IjIwMTEiLCJDb2RlIjoiMjAxMSIsIkdlbmRlciI6dHJ1ZSwiQ29udGFjdFZpc2liaWxpdHkiOnRydWUsIk1vYmlsZSI6IjE4MDI4MTk2NTU5IiwiQ29ybmV0IjpudWxsLCJUZWxlcGhvbmUiOm51bGwsIkVtYWlsIjoiNDIyOTYzODQ1QHFxLmNvbSIsIldlQ2hhdCI6bnVsbCwiU3VwZXJpb3JJZCI6IjAiLCJBY3RpdmVkIjp0cnVlLCJBbGxvd0xvZ2luIjp0cnVlLCJJbml0aWFsUGlueWluIjoiS1dXIiwiUGlueWluIjoiS29uZ1dlbldlaSIsIklzT25saW5lIjpmYWxzZSwiSXNFeHRlcm5hbCI6ZmFsc2UsIkV4dGVuc2lvbk51bWJlciI6bnVsbCwiQWxsb3dNb2JpbGUiOnRydWUsIkluaXRpYWxXdWJpIjoiQllEIiwiQWNjb3VudFZhbGlkaXR5IjpudWxsLCJQaW4iOm51bGwsIkNyZWF0b3IiOm51bGwsIkNyZWF0b3JJZCI6IjAiLCJDcmVhdGVUaW1lIjpudWxsLCJVcGRhdGVVc2VyTmFtZSI6Ium+meWKoOmOjyIsIlVwZGF0ZVVzZXJJZCI6IjU4Mzk2Mjc2NTU1OTk1OTU1MiIsIlVwZGF0ZVRpbWUiOiIyMDI1LTEyLTMwVDEwOjQ2OjA4LjU1MTg1MTMiLCJJbmFjdGl2ZVRpbWUiOm51bGwsIkRlcGFydG1lbnQiOnsiTmFtZSI6Iui9r+S7tuS/oeaBr+mDqCIsIlBhdGgiOiIwMzI0Nzk2OTQwNDM0ODA0NzM2IiwiRnVsbE5hbWUiOiLova/ku7bkv6Hmga/pg6giLCJBY3RpdmVkIjp0cnVlLCJTb3J0Q29kZSI6IjAwMDUiLCJDYXRlZ29yaWVzIjoiIiwiV2VDaGF0V29ya0RlcElkIjo1OSwiV2VDaGF0V29ya0NvcnBJZCI6Ind3NDFmYTNmZGQzMDMxOGJlYiIsIk1hbm5pbmciOjAsIk5vTGltaXQiOmZhbHNlLCJDb250YWN0VmlzaWJpbGl0eSI6dHJ1ZSwiVXNlckNvdW50IjowLCJJZCI6IjMyNDc5Njk0MDQzNDgwNDczNiJ9LCJQb3NpdGlvbnMiOlt7IlVzZXJJZCI6IjU4Mzk2Mjc1NjQyNDc2NTQ0MCIsIlBvc2l0aW9uSWQiOiI2NjgwMjc4NTgyNDA3ODIzMzYiLCJNYWpvciI6dHJ1ZSwiU2VxdWVuY2UiOjEsIlNvcnRDb2RlIjoiOTk5OTk5IiwiUG9zaXRpb24iOnsiSm9iSWQiOiI2NDU1NzcxMjI5ODI3MDMxMDQiLCJPcmdhbml6ZUlkIjoiMzI0Nzk2OTQwNDM0ODA0NzM2IiwiTmFtZSI6Iui9r+S7tuS/oeaBr+mDqC/mioDmnK/mgLvnm5EiLCJKb2IiOnsiTmFtZSI6IuaKgOacr+aAu+ebkSIsIlN5c0J1aWxkSW4iOmZhbHNlLCJTb3J0Q29kZSI6OTk5OTk5LCJJZCI6IjY0NTU3NzEyMjk4MjcwMzEwNCJ9LCJJZCI6IjY2ODAyNzg1ODI0MDc4MjMzNiJ9LCJJZCI6IjU4Mzk2Mjc1NzI0Njg0OTAyNCJ9XSwiUm9sZXMiOltdLCJPcmdhbml6ZVJvbGVzIjpbXSwiUGFzc3dvcmQiOm51bGwsIlN1cGVyaW9yIjpudWxsLCJSZWxhdGlvbk9yZ2FuaXplcyI6bnVsbCwiVXNlckNhcmRFeHRyYSI6bnVsbCwiSWQiOiI1ODM5NjI3NTY0MjQ3NjU0NDAiLCJKb2IiOnsiTmFtZSI6IuaKgOacr+aAu+ebkSIsIlN5c0J1aWxkSW4iOmZhbHNlLCJTb3J0Q29kZSI6OTk5OTk5LCJJZCI6IjY0NTU3NzEyMjk4MjcwMzEwNCJ9LCJVc2VySWQiOiI1ODM5NjI3NTY0MjQ3NjU0NDAiLCJGb3JtZXJOYW1lIjpudWxsLCJQb3N0SWQiOiI1IiwiUG9zdCI6IuaKgOacr+WylyIsIlBvc3RJZFBhdGgiOlsiNSJdLCJUaXRsZUlkIjpudWxsLCJUaXRsZSI6bnVsbCwiVGl0bGVDb25mZXJpbmdEYXRlIjpudWxsLCJUaXRsZUdyYWRlSWQiOm51bGwsIlRpdGxlR3JhZGUiOm51bGwsIlN0YXR1cyI6IuWcqOiBjCIsIkVtcGxveWVlQ2F0ZWdvcnkiOm51bGwsIkJpcnRoZGF5IjoiMTk4Ni0wMi0xOFQwMDowMDowMCIsIklkZW50aXR5Q2FyZE51bWJlciI6IjQ0MDY4MjE5ODYwMjE4MTAzNiIsIlBhc3Nwb3J0TnVtYmVyIjpudWxsLCJOYXRpb25hbGl0eSI6IuS4reWbvSIsIkV0aG5pY0dyb3VwIjoi5rGJ5pePIiwiTmF0aXZlUGxhY2UiOiLkvZvlsbEiLCJDdXJyZW50UmVzaWRlbmNlIjoi5bm/5bee5biC55m95LqR5Yy65Lqs5rqq6Lev5LqR5pmv6Iqx5Zut5paw5LqR5qGC6IuRMTbmoIsiLCJSZWdpc3RlZFJlc2lkZW5jZSI6bnVsbCwiTWFyaXRhbFN0YXR1cyI6IuacquWpmiIsIlBvbGl0aWNhbFN0YXR1cyI6Iue+pOS8lyIsIkhpZ2hlc3REZWdyZWUiOiLnoJTnqbbnlJ8iLCJTdGFydGluZ0RhdGVPZkZpcnN0Sm9iIjoiMjAwOS0wMy0wMVQwMDowMDowMCIsIkVudGVyRGF0ZSI6IjIwMTctMDItMDZUMDA6MDA6MDAiLCJSZXNpZ25hdGlvbkRhdGUiOm51bGwsIlJldGlyZW1lbnREYXRlIjpudWxsLCJJbnN1cmFuY2UiOm51bGwsIkluc3VyZWREYXRlIjpudWxsLCJBdHRlbmRhbmNlTWFjaGluZUlkIjpudWxsLCJQb3N0Q2F0ZWdvcnkiOm51bGwsIkJpcnRoQWRkcmVzcyI6bnVsbCwiSm9pblBhcnR5RGF0ZSI6bnVsbCwiQXJjaGl2ZXNOdW1iZXIiOm51bGwsIlN0YWZmaW5nQ2F0ZWdvcnkiOm51bGwsIkFjY291bnRVbml0SWQiOm51bGwsIkFjY291bnRVbml0TmFtZSI6bnVsbCwiUGVyc29ubmVsTW9kZWwiOm51bGwsIk9yZ0pvYk1pZCI6bnVsbCwiQXZhdGFyRmlsZUlkIjpudWxsLCJJc0xlYWRlciI6bnVsbCwiUGVyc29ubmVsQ29udHJhY3QiOm51bGwsIkRlcGFydG1lbnRSZWNvcmQiOm51bGwsIkV4dHJhRmlsZSI6bnVsbCwiRW1wbG95ZWVJZCI6IjU4Mzk2Mjc1NjQ4NzY4MDAwMCIsInR5cGUiOjB9',
+                ),
+              ],
             };
           }
         }
@@ -858,6 +876,7 @@
           { key: 'showHitokoto', type: 'checkbox', label: '显示每日一言' },
           { key: 'showFireworks', type: 'checkbox', label: '显示假日烟花' },
           { key: 'showFireworksBtn', type: 'checkbox', label: '显示放烟花' },
+          { key: 'showLotBtn', type: 'checkbox', label: '显示每日一签' },
           { key: 'debug', type: 'checkbox', label: '调试模式' },
         ],
       },
@@ -1794,6 +1813,408 @@
       setTimeout(() => {
         if (document.body.contains(container)) document.body.removeChild(container);
       }, 500);
+    });
+  }
+
+  /** =================================== 每日一签 ============================================ */
+
+  /** 添加每日一签按钮 */
+  function addLotBtn() {
+    return new Promise((resolve) => {
+      if (!settings.showLotBtn) return resolve(true);
+
+      var { navBar, exists } = hasNavBarItem(nav_lot_btn_id);
+      if (!navBar || exists) return resolve(exists);
+
+      var liItem = document.createElement('li');
+      liItem.id = nav_lot_btn_id;
+      liItem.className = 'ng-star-inserted';
+      liItem.style = 'display: inline-block; vertical-align: middle;line-height: 100%; min-width: 50px; padding: 8px 2px; text-align: center; border-radius: 2px; cursor: pointer;';
+
+      var lotButton = document.createElement('button');
+      lotButton.style.backgroundColor = 'transparent';
+      lotButton.style.color = 'white';
+      lotButton.style.border = 'none';
+      lotButton.style.textAlign = 'center';
+      lotButton.style.textDecoration = 'none';
+      lotButton.style.display = 'inline-flex';
+      lotButton.style.flexDirection = 'column';
+      lotButton.style.alignItems = 'center';
+      lotButton.style.justifyContent = 'center';
+      lotButton.style.fontSize = '14px';
+      lotButton.style.cursor = 'pointer';
+      lotButton.style.padding = '2px 6px';
+      lotButton.style.lineHeight = '1';
+
+      // 红色签牌 SVG 图标
+      var lotBtnIcon =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="22" viewBox="0 0 24 26" fill="none" style="display:block;">' +
+        '<rect x="4" y="5" width="16" height="18" rx="2" fill="#d32f2f" stroke="#b71c1c" stroke-width="0.8"/>' +
+        '<rect x="6" y="4" width="12" height="2.5" rx="1.25" fill="#c62828"/>' +
+        '<path d="M12 4v-2" stroke="#d32f2f" stroke-width="1.2" stroke-linecap="round"/>' +
+        '<circle cx="12" cy="10.5" r="2" fill="none" stroke="#f5c542" stroke-width="0.8"/>' +
+        '<line x1="7" y1="15.5" x2="17" y2="15.5" stroke="#f5c542" stroke-width="0.8" stroke-linecap="round" opacity="0.6"/>' +
+        '<line x1="7" y1="18" x2="13" y2="18" stroke="#f5c542" stroke-width="0.8" stroke-linecap="round" opacity="0.6"/>' +
+        '</svg>';
+
+      var lotBtnResult = document.createElement('span');
+      lotBtnResult.id = 'lotBtnResult';
+      lotBtnResult.style.cssText = 'display:none;font-size:11px;color:#FFD700;line-height:1.3;margin-top:2px;white-space:nowrap;';
+
+      // 检查当天是否已抽签
+      var savedDailyLot = getConfig('dailyLot');
+      if (savedDailyLot && savedDailyLot.date === new Date().toISOString().slice(0, 10)) {
+        lotBtnResult.textContent = savedDailyLot.lot.level;
+        lotBtnResult.style.display = 'block';
+      } else {
+        lotBtnResult.textContent = '抽签';
+        lotBtnResult.style.display = 'block';
+      }
+
+      lotButton.innerHTML = lotBtnIcon;
+      lotButton.appendChild(lotBtnResult);
+
+      // 悬浮提示工具条
+      var tooltip = document.createElement('div');
+      tooltip.id = 'lotTooltip';
+      tooltip.style.cssText =
+        'display:none;position:fixed;z-index:10000;background:linear-gradient(135deg,#8B0000 0%,#CD853F 50%,#8B0000 100%);border:2px solid #FFD700;border-radius:12px;padding:16px 18px;' +
+        'box-shadow:0 8px 30px rgba(0,0,0,0.5);text-align:center;min-width:220px;max-width:280px;pointer-events:none;';
+      var tooltipLevel = document.createElement('div');
+      tooltipLevel.style.cssText = 'font-size:22px;font-weight:bold;margin-bottom:4px;';
+      var tooltipType = document.createElement('div');
+      tooltipType.style.cssText = 'font-size:13px;color:#FFF8DC;margin-bottom:8px;';
+      var tooltipContent = document.createElement('div');
+      tooltipContent.style.cssText = 'font-size:14px;color:#fff;line-height:1.5;padding:8px;background:rgba(0,0,0,0.2);border-radius:8px;border:1px solid rgba(255,215,0,0.5);';
+      var tooltipExplain = document.createElement('div');
+      tooltipExplain.style.cssText = 'font-size:12px;color:#FFD700;line-height:1.5;margin-top:8px;';
+      tooltip.appendChild(tooltipLevel);
+      tooltip.appendChild(tooltipType);
+      tooltip.appendChild(tooltipContent);
+      tooltip.appendChild(tooltipExplain);
+      document.body.appendChild(tooltip);
+
+      function updateTooltip() {
+        var saved = getConfig('dailyLot');
+        if (saved && saved.date === new Date().toISOString().slice(0, 10)) {
+          var lot = saved.lot;
+          tooltipLevel.textContent = lot.level;
+          tooltipLevel.style.color = '#FFD700';
+          if (lot.level === '上上签') tooltipLevel.style.textShadow = '0 0 20px rgba(255,215,0,0.8)';
+          else if (lot.level === '上吉签') {
+            tooltipLevel.style.color = '#FFA500';
+            tooltipLevel.style.textShadow = '0 0 15px rgba(255,165,0,0.6)';
+          } else if (lot.level === '中吉签') {
+            tooltipLevel.style.color = '#FFD700';
+            tooltipLevel.style.opacity = '0.9';
+            tooltipLevel.style.textShadow = 'none';
+          } else {
+            tooltipLevel.style.color = '#CD853F';
+            tooltipLevel.style.opacity = '0.8';
+            tooltipLevel.style.textShadow = 'none';
+          }
+          tooltipType.textContent = lot.type + '签';
+          tooltipContent.textContent = lot.content;
+          tooltipExplain.textContent = lot.explain;
+          return true;
+        }
+        return false;
+      }
+
+      lotButton.onmouseover = function () {
+        lotButton.style.backgroundColor = 'hsla(0, 0%, 100%, .2)';
+        lotButton.style.borderRadius = '4px';
+        if (updateTooltip()) {
+          var rect = lotButton.getBoundingClientRect();
+          var tipWidth = 260;
+          var left = rect.left + rect.width / 2 - tipWidth / 2;
+          if (left + tipWidth > window.innerWidth - 8) left = window.innerWidth - tipWidth - 8;
+          if (left < 8) left = 8;
+          tooltip.style.display = 'block';
+          tooltip.style.left = left + 'px';
+          tooltip.style.top = rect.bottom + 8 + 'px';
+          tooltip.style.transform = 'none';
+        }
+      };
+      lotButton.onmouseout = function () {
+        lotButton.style.backgroundColor = 'transparent';
+        tooltip.style.display = 'none';
+      };
+
+      lotButton.onclick = function () {
+        showLottery();
+      };
+
+      liItem.appendChild(lotButton);
+      navBar.insertBefore(liItem, settings.showStatisticsInfo ? navBar.lastChild : null);
+
+      resolve(true);
+    });
+  }
+
+  var LOTTERIES = (function () {
+    var _d = atob;
+    var _u = function (s) {
+      return decodeURIComponent(
+        Array.prototype.map
+          .call(_d(s), function (c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          })
+          .join(''),
+      );
+    };
+    return JSON.parse(
+      _u(
+        'W3sibGV2ZWwiOiLkuIrkuIrnrb4iLCJ0eXBlIjoi6LSi6L+QIiwiY29udGVudCI6Iui0oua6kOa7mua7mu+8jOWFq+aWueadpei0ou+8jOWygeWygeW5s+WuiSIsImV4cGxhaW4iOiLku4rml6XotKLov5DkuqjpgJrvvIzml6DorrrmraPotKLov5jmmK/lgY/otKLpg73mnInlpb3mtojmga/jgILmipXotYTnkIbotKLlj6/lvpfkuLDljprlm57miqXvvIzlu7rorq7miormj6Hml7bmnLrvvIzotKLmupDlub/ov5vjgIIifSx7ImxldmVsIjoi5LiK5LiK562+IiwidHlwZSI6IuW5s+WuiSIsImNvbnRlbnQiOiLlubPlronlkInnpaXvvIzkuIfkuovlpoLmhI/vvIzlv4Pmg7PkuovmiJAiLCJleHBsYWluIjoi5LuK5pel5bmz5a6J6aG66YGC77yM5peg54G+5peg6Zq+44CC5pen5Y6E5bey5Y6777yM5paw5oSB5LiN5L6177yM6ZiW5a625a6J5bq377yM56aP5rO957u16ZW/44CCIn0seyJsZXZlbCI6IuS4iuS4iuetviIsInR5cGUiOiLkuovkuJoiLCJjb250ZW50Ijoi5LqL5Lia6IW+6aOe77yM5q2l5q2l6auY5Y2H77yM5YmN56iL5Ly86ZSmIiwiZXhwbGFpbiI6IuS6i+S4muS4iuWwhui/juadpemHjeWkp+acuumBh++8jOaciei0teS6uuebuOWKqeOAguaCqOeahOaJjeiDveWwhuW+l+WIsOWFheWIhuWPkeaMpe+8jOWNh+iBjOWKoOiWquWcqOacm+OAgiJ9LHsibGV2ZWwiOiLkuIrkuIrnrb4iLCJ0eXBlIjoi5ae757yYIiwiY29udGVudCI6IuWkqei1kOiJr+e8mO+8jOWWnOe7k+i/nueQhu+8jOW5uOemj+e+jua7oSIsImV4cGxhaW4iOiLljZXouqvogIXmnInmnJvpgYfliLDlkb3kuK3ms6jlrprnmoTkvLTkvqPvvIzmnInkvLTkvqPogIXmhJ/mg4XlsIbmm7TliqDnlJzonJzjgILlrrbluq3lkoznnabvvIzlubjnpo/nvo7mu6HjgIIifSx7ImxldmVsIjoi5LiK5LiK562+IiwidHlwZSI6IuWBpeW6tyIsImNvbnRlbnQiOiLouqvlvLrlipvlo67vvIznsr7npZ7mipbmk57vvIznmb7nl4XkuI3kvrUiLCJleHBsYWluIjoi6Lqr5L2T54q25Ya15p6B5L2z77yM57K+5Yqb5YWF5rKb44CC5pen55a+5bC95Y6777yM5paw5oGZ5LiN55Sf77yM5q2j5piv6L+Q5Yqo5YW755Sf55qE5aW95pe25py644CCIn0seyJsZXZlbCI6IuS4iuS4iuetviIsInR5cGUiOiLlrabkuJoiLCJjb250ZW50Ijoi6YeR5qac6aKY5ZCN77yM5a2m5Lia5pyJ5oiQ77yM5YmN56iL5LiH6YeMIiwiZXhwbGFpbiI6IuWtpuS4mui/kOaegeS9s++8jOiAg+ivlei/kOaXuuOAguWLpOWli+WIu+iLpue7iOacieWbnuaKpe+8jOaZuuaFp+S5i+mXqOS4uuS9oOaVnuW8gOOAgiJ9LHsibGV2ZWwiOiLkuIrkuIrnrb4iLCJ0eXBlIjoi5Lq66ZmFIiwiY29udGVudCI6Iui0teS6uuebiOmXqO+8jOW3puWPs+mAoua6kO+8jOS8l+acm+aJgOW9kiIsImV4cGxhaW4iOiLkurrpmYXlhbPns7vpobrpgYLvvIzotLXkurrov5DlvLrlirLjgILlnKjnpL7kuqTlnLrlkIjkuK3lsIblpKfmlL7lvILlvanvvIzojrflvpfku5bkurrorqTlj6/kuI7mlK/mjIHjgIIifSx7ImxldmVsIjoi5LiK5ZCJ562+IiwidHlwZSI6Iui0oui/kCIsImNvbnRlbnQiOiLlpKflkInlpKfliKnvvIzotKLluJvkuLDnm4jvvIzml6Xnp6/mnIjlr4wiLCJleHBsYWluIjoi6LSi6L+Q5LiN6ZSZ77yM6Jm95peg5pq05a+M5LmL6LGh77yM5L2G57uG5rC06ZW/5rWB44CC5Yuk5L+t5oyB5a6277yM55CG6LSi5pyJ6YGT77yM6LSi5bib6Ieq54S25Liw55uI44CCIn0seyJsZXZlbCI6IuS4iuWQieetviIsInR5cGUiOiLlubPlrokiLCJjb250ZW50Ijoi5bmz5a6J5peg5LqL77yM56aP5rCU5ruh5ruh77yM5Zac5rCU55uI6ZeoIiwiZXhwbGFpbiI6IuW5s+WuieaXpeWtkOeahOWlveaXtuWFie+8jOaXoOWkp+eBvuWkp+mavuOAguemj+awlOa7oea7oe+8jOWutuW6reWWnOawlOebiOmXqO+8jOePjeaDnOW9k+S4i+e+juWlveOAgiJ9LHsibGV2ZWwiOiLkuIrlkInnrb4iLCJ0eXBlIjoi5LqL5LiaIiwiY29udGVudCI6IuS6i+S4mumhuumBgu+8jOW+l+W/g+W6lOaJi++8jOWJjeeoi+S8vOmUpiIsImV4cGxhaW4iOiLlt6XkvZzov5vlsZXpobrliKnvvIzog73lipvlvpfliLDorqTlj6/jgILomb3mnInlsI/ms6LmipjvvIzkvYblnYfog73ljJbpmankuLrlpLfvvIznqLPmraXlkJHliY3jgIIifSx7ImxldmVsIjoi5LiK5ZCJ562+IiwidHlwZSI6IuWnu+e8mCIsImNvbnRlbnQiOiLoirHlpb3mnIjlnIbvvIzmg4XmipXmhI/lkIjvvIznlJzonJzmuKnppqgiLCJleHBsYWluIjoi5oSf5oOF6L+Q5Yq/6Imv5aW977yM5Y2V6Lqr6ICF5pyJ57yY6YGH6KeB5b+D5Luq5LmL5Lq677yM5pyJ5Ly05L6j6ICF5oSf5oOF55Sc6Jyc44CC5LqS5pWs5LqS54ix77yM5bm456aP6ZW/5LmF44CCIn0seyJsZXZlbCI6IuS4iuWQieetviIsInR5cGUiOiLlgaXlurciLCJjb250ZW50Ijoi6Lqr5by65L2T5YGl77yM57K+56We55+N6ZOE77yM5peg55eF5peg54G+IiwiZXhwbGFpbiI6Iui6q+S9k+eKtuaAgeiJr+Wlve+8jOeyvuelnumlsea7oeOAguazqOaEj+WKs+mAuOe7k+WQiO+8jOmAguW9k+mUu+eCvO+8jOWBpeW6t+eKtuaAgeWwhui2iuadpei2iuWlveOAgiJ9LHsibGV2ZWwiOiLkuIrlkInnrb4iLCJ0eXBlIjoi5Ye66KGMIiwiY29udGVudCI6IuWHuuihjOmhuuWIqe+8jOS4gOi3r+mhuumjju+8jOW5s+WuieW+gOi/lCIsImV4cGxhaW4iOiLlh7rooYzov5Dlir/oia/lpb3vvIzml4XpgJTpobrliKnjgILml6Dorrrlh7rlt67ov5jmmK/ml4XooYzvvIzpg73lsIblubPlronlvoDov5TvvIzkuIDot6/pobrpo47jgIIifSx7ImxldmVsIjoi5LiK5ZCJ562+IiwidHlwZSI6IuWutuWuhSIsImNvbnRlbnQiOiLlrrblroXlhbTml7rvvIzlkoznnabmuKnppqjvvIznpo/ms73nu7Xplb8iLCJleHBsYWluIjoi5a625a6F6L+Q5Yq/5YW05pe677yM5a625bqt5oiQ5ZGY5ZKM552m55u45aSE44CC5rip6aao5ZKM6LCQ55qE5a625bqt5rCb5Zu05bCG5bim5p2l57u157u156aP5rO944CCIn0seyJsZXZlbCI6IuS4reWQieetviIsInR5cGUiOiLotKLov5AiLCJjb250ZW50Ijoi6LSi6L+Q5bmz56iz77yM6YeP5YWl5Li65Ye677yM56ev5bCR5oiQ5aSaIiwiZXhwbGFpbiI6Iui0oui/kOW5s+eos+aZrumAmu+8jOS4jeWunOaKleacuuWGkumZqeOAgumHj+WFpeS4uuWHuu+8jOiKguS/reaMgeWutu+8jOenr+WwkeaIkOWkmuS5n+aYr+S4gOeslOi0ouWvjOOAgiJ9LHsibGV2ZWwiOiLkuK3lkInnrb4iLCJ0eXBlIjoi5bmz5a6JIiwiY29udGVudCI6IuW5s+W5s+WuieWuie+8jOmhuumhuuWIqeWIqe+8jOWugemdmeiHtOi/nCIsImV4cGxhaW4iOiLlubPlronov5DlsJrlj6/vvIzml6DlpKfngb7lpKfpmr7jgILkvYbpnIDms6jmhI/ml6XluLjlronlhajvvIzkuI3lj6/lpKfmhI/jgILlv4PpnZnoh6rnhLblh4nvvIzlubPlronmmK/npo/jgIIifSx7ImxldmVsIjoi5Lit5ZCJ562+IiwidHlwZSI6IuS6i+S4miIsImNvbnRlbnQiOiLli6Tli4nmlazkuJrvvIzohJrouI/lrp7lnLDvvIznqLPmraXliY3ov5siLCJleHBsYWluIjoi5LqL5Lia6ZyA6ISa6LiP5a6e5Zyw77yM5Yuk5YuJ5Yqq5Yqb44CC6Jm95pyJ5Zuw6Zq+5oyR5oiY77yM5L2G5Y+q6KaB5Z2a5oyB5LiN5oeI77yM57uI5Lya5pyJ5omA56qB56C044CCIn0seyJsZXZlbCI6IuS4reWQieetviIsInR5cGUiOiLlp7vnvJgiLCJjb250ZW50Ijoi6aG65YW26Ieq54S277yM5rC05Yiw5rig5oiQ77yM6Z2Z5b6F6Iqx5byAIiwiZXhwbGFpbiI6IuWnu+e8mOiusuaxgue8mOWIhu+8jOS4jeWPr+W8uuaxguOAguiAkOW/g+etieW+he+8jOmhuuWFtuiHqueEtu+8jOe8mOWIhuS8muWmguacn+iAjOiHs+OAguW3suaBi+eIseiAheaEn+aDheW5s+eos+WPkeWxleOAgiJ9LHsibGV2ZWwiOiLkuK3lkInnrb4iLCJ0eXBlIjoi5YGl5bq3IiwiY29udGVudCI6IuWBpeW6t+W5s+W5s++8jOazqOmHjeWFu+eUn++8jOa4kOWFpeS9s+WigyIsImV4cGxhaW4iOiLlgaXlurfnirblhrXkuIDoiKzvvIzpnIDopoHlpJrliqDms6jmhI/jgILlkIjnkIbppa7po5/vvIzpgILlvZPov5DliqjvvIzkv53mjIHoia/lpb3nmoTkvZzmga/kuaDmg6/jgIIifSx7ImxldmVsIjoi5Lit5ZCJ562+IiwidHlwZSI6IuWtpuS4miIsImNvbnRlbnQiOiLli6Tog73ooaXmi5nvvIzmjIHkuYvku6XmgZLvvIznu4jmnInmiYDmiJAiLCJleHBsYWluIjoi5a2m5Lia6L+Q5Yq/5Lit562J77yM6ZyA5LuY5Ye65pu05aSa5Yqq5Yqb44CC5L2G5pyJ5LuY5Ye65b+F5pyJ5Zue5oql77yM5Z2a5oyB5bCx5piv6IOc5Yip44CC5oiS6aqE5oiS6LqB44CCIn0seyJsZXZlbCI6IuS4reWQieetviIsInR5cGUiOiLkurrpmYUiLCJjb250ZW50Ijoi5Lul5ZKM5Li66LS177yM5a695Lul5b6F5Lq677yM5reh5a6a5LuO5a65IiwiZXhwbGFpbiI6IuS6uumZheWFs+ezu+WwmuWPr++8jOS9humcgOazqOaEj+iogOihjOOAguS7peWSjOS4uui0te+8jOWuveS7peW+heS6uu+8jOmBh+WIsOefm+ebvuWGt+mdmeWkhOeQhuOAgiJ9LHsibGV2ZWwiOiLlkInnrb4iLCJ0eXBlIjoi6LSi6L+QIiwiY29udGVudCI6IuWwj+i0oui/m+iii++8jOenr+WwkeaIkOWkmu+8jOe7huawtOmVv+a1gSIsImV4cGxhaW4iOiLotKLov5DlubPmt6HvvIzml6DlpKfnmoTov5votKbjgILkvYblsI/otKLov5DkuI3mlq3vvIznp6/lsJHmiJDlpJrmnInml6Dor7Tlpb3jgILohJrouI/lrp7lnLDnmoTmrLrotKLmmK/lr7zlpITjgIIifSx7ImxldmVsIjoi5ZCJ562+IiwidHlwZSI6IuW5s+WuiSIsImNvbnRlbnQiOiLlronlsYXkuZDkuJrvvIzlsoHmnIjpnZnlpb3vvIznjrDkuJblronnqLMiLCJleHBsYWluIjoi5bmz5a6J6L+Q5pmu6YCa77yM5L2G5rGC56iz5Li65LiK44CC5peg6aOO5peg5rWq5L6/5piv5aW95pel5a2Q77yM5a6J5bGF5LmQ5Lia77yM5Lqr5Y+X5bmz5reh55Sf5rS744CCIn0seyJsZXZlbCI6IuWQieetviIsInR5cGUiOiLkuovkuJoiLCJjb250ZW50Ijoi5pys5YiG5YGa5LqL77yM5oGq5bC96IGM5a6I77yM5peg5oSn5LqO5b+DIiwiZXhwbGFpbiI6IuS6i+S4mui/kOW5s+a3oe+8jOS4jeWunOWPmOWKqOOAguWBmuWlveacrOiBjOW3peS9nO+8jOaBquWwveiBjOWuiO+8jOeUqOW5s+W4uOW/g+WvueW+heW3peS9nOS4reeahOW+l+WkseOAgiJ9LHsibGV2ZWwiOiLlkInnrb4iLCJ0eXBlIjoi5ae757yYIiwiY29udGVudCI6IuW5s+W5s+a3oea3oeaJjeaYr+ecn++8jOe7huawtOmVv+a1geaDheaEj+a3sSIsImV4cGxhaW4iOiLlp7vnvJjov5DlubPmt6HkvYbnnJ/lrp7jgILlubPmt6HkuK3nmoTnnJ/mg4XmnIDkuLrlj6/otLXvvIznu4bmsLTplb/mtYHnmoTmhJ/mg4XmnIDmmK/plb/kuYXjgILnj43mg5znnLzliY3kurrjgIIifSx7ImxldmVsIjoi5ZCJ562+IiwidHlwZSI6IuWBpeW6tyIsImNvbnRlbnQiOiLml6Dnl4Xml6Dngb7lsLHmmK/npo/vvIzlubPlronlgaXlurfmnIDnj43otLUiLCJleHBsYWluIjoi5YGl5bq36L+Q5Yq/5LiA6Iis77yM5L2G5peg5aSn56KN44CC5rOo5oSP5a2j6IqC5Y+Y5YyW77yM5Y+K5pe25aKe5YeP6KGj54mp44CC6Lqr5L2T5YGl5bq35bCx5piv5pyA5aSn55qE56aP5rCU44CCIn0seyJsZXZlbCI6IuWQieetviIsInR5cGUiOiLlh7rooYwiLCJjb250ZW50Ijoi5a6J5q2l5b2T6L2m77yM56iz5Lit5rGC6L+b77yM5bmz5a6J6aG66YGCIiwiZXhwbGFpbiI6IuWHuuihjOi/kOWKv+aZrumAmu+8jOS4jeWunOi/nOihjOOAguWmguaenOW/hemhu+WHuuihjO+8jOW7uuiuruaPkOWJjeWBmuWlveWHhuWkh++8jOazqOaEj+S6pOmAmuWuieWFqOOAgiJ9LHsibGV2ZWwiOiLlkInnrb4iLCJ0eXBlIjoi5a625a6FIiwiY29udGVudCI6Iuefpei2s+W4uOS5kO+8jOWutuWSjOS4h+S6i+WFtO+8jOW5s+WuieaYr+emjyIsImV4cGxhaW4iOiLlrrblroXov5Dlir/lubPnqLPjgILnn6XotrPluLjkuZDvvIzlrrbluq3lkoznnabmnIDkuLrph43opoHjgILlubPlubPmt6Hmt6HmiY3mmK/nnJ/vvIzlrrblroXljLnkuZDjgIIifV0=',
+      ),
+    );
+  })();
+
+  /** 显示抽签弹窗 */
+  function showLottery() {
+    var todayStr = new Date().toISOString().slice(0, 10);
+    var savedLot = getConfig('dailyLot');
+    var hasDrawnToday = savedLot && savedLot.date === todayStr;
+
+    // 注入样式
+    if (!document.getElementById('lotStyle')) {
+      var s = document.createElement('style');
+      s.id = 'lotStyle';
+      s.textContent =
+        '@keyframes lotFadeIn{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}' +
+        '@keyframes lotShake{0%,100%{transform:translateX(0) rotate(0)}10%{transform:translateX(-14px) rotate(-5deg)}20%{transform:translateX(14px) rotate(5deg)}30%{transform:translateX(-12px) rotate(-4deg)}40%{transform:translateX(12px) rotate(4deg)}50%{transform:translateX(-10px) rotate(-3deg)}60%{transform:translateX(10px) rotate(3deg)}70%{transform:translateX(-8px) rotate(-2deg)}80%{transform:translateX(8px) rotate(2deg)}90%{transform:translateX(-4px) rotate(-1deg)}}' +
+        '@keyframes lotSparkle{0%,100%{opacity:0.15}50%{opacity:0.3}}' +
+        '@keyframes stickUp{from{bottom:20px}to{bottom:120px}}' +
+        '@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}';
+      document.head.appendChild(s);
+    }
+
+    var overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9998;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"STKaiti","KaiTi","Microsoft YaHei",serif;' +
+      'background:rgba(0,0,0,0.55);';
+
+    // 主容器
+    var container = document.createElement('div');
+    container.style.cssText = 'position:relative;text-align:center;z-index:1;';
+
+    // 标题
+    var title = document.createElement('div');
+    title.style.cssText = 'font-size:36px;color:#fff;text-shadow:0 0 20px rgba(255,215,0,0.6),0 0 40px rgba(255,215,0,0.3);margin-bottom:24px;letter-spacing:4px;font-weight:bold;';
+    title.textContent = '每日一签';
+    container.appendChild(title);
+
+    // 抽签筒容器
+    var cylContainer = document.createElement('div');
+    cylContainer.style.cssText = 'position:relative;width:200px;height:280px;margin:10px auto;cursor:pointer;transition:transform 0.3s ease;';
+    cylContainer.onmouseenter = function () {
+      cylContainer.style.transform = 'scale(1.03)';
+    };
+    cylContainer.onmouseleave = function () {
+      cylContainer.style.transform = 'scale(1)';
+    };
+
+    // 签条
+    var stick = document.createElement('div');
+    stick.id = 'lotStick';
+    stick.style.cssText =
+      'position:absolute;top:85px;left:50%;transform:translateX(-50%);width:35px;height:160px;' +
+      'background:linear-gradient(90deg,#FFD700 0%,#FFF8DC 50%,#FFD700 100%);border-radius:3px;' +
+      'box-shadow:0 2px 10px rgba(0,0,0,0.3),inset 0 0 20px rgba(255,215,0,0.3);z-index:20;' +
+      'transition:top 0.7s cubic-bezier(0.34,1.56,0.64,1);';
+    stick.textContent = '签';
+    stick.style.fontSize = '16px';
+    stick.style.color = '#8B0000';
+    stick.style.fontWeight = 'bold';
+    stick.style.lineHeight = '30px';
+    stick.style.textAlign = 'center';
+
+    // 签筒顶部（筒口）
+    var cylTop = document.createElement('div');
+    cylTop.style.cssText =
+      'position:absolute;top:50px;left:50%;transform:translateX(-50%);width:140px;height:30px;' +
+      'background:linear-gradient(90deg,#8B4513 0%,#CD853F 30%,#FFD700 50%,#CD853F 70%,#8B4513 100%);' +
+      'border-radius:50% 50% 0 0;box-shadow:0 5px 15px rgba(0,0,0,0.3);z-index:12;';
+
+    // 签筒主体
+    var cylBody = document.createElement('div');
+    cylBody.style.cssText =
+      'position:absolute;top:75px;left:50%;transform:translateX(-50%);width:120px;height:180px;' +
+      'background:linear-gradient(90deg,#8B4513 0%,#CD853F 15%,#FFD700 25%,#FFD700 75%,#CD853F 85%,#8B4513 100%);' +
+      'border-radius:0 0 5px 5px;' +
+      'box-shadow:inset 0 0 30px rgba(0,0,0,0.3),0 10px 30px rgba(0,0,0,0.5),0 0 50px rgba(255,215,0,0.2);z-index:11;';
+
+    // 筒内阴影
+    var cylInner = document.createElement('div');
+    cylInner.style.cssText =
+      'position:absolute;top:0;left:50%;transform:translateX(-50%);width:100px;height:170px;' +
+      'background:linear-gradient(180deg,rgba(139,69,19,0.8) 0%,rgba(0,0,0,0.6) 100%);border-radius:0 0 3px 3px;';
+
+    // 组装签筒
+    cylBody.appendChild(cylInner);
+    cylContainer.appendChild(stick);
+    cylContainer.appendChild(cylTop);
+    cylContainer.appendChild(cylBody);
+
+    container.appendChild(cylContainer);
+
+    // 提示文字
+    var hint = document.createElement('div');
+    hint.style.cssText = 'color:#FFE4B5;font-size:18px;margin-top:24px;text-shadow:0 0 10px rgba(0,0,0,0.8);letter-spacing:2px;';
+    hint.textContent = '点击签筒，抽取运势签';
+    container.appendChild(hint);
+
+    overlay.appendChild(container);
+
+    // 结果弹窗
+    var resultOverlay = document.createElement('div');
+    resultOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:9999;display:none;align-items:center;justify-content:center;';
+
+    var resultBox = document.createElement('div');
+    resultBox.style.cssText =
+      'position:relative;background:linear-gradient(135deg,#8B0000 0%,#CD853F 50%,#8B0000 100%);padding:36px 32px;border-radius:20px;text-align:center;max-width:90%;width:400px;' +
+      'box-shadow:0 0 50px rgba(255,215,0,0.5),inset 0 0 30px rgba(0,0,0,0.3);border:3px solid #FFD700;animation:slideUp 0.5s ease;';
+
+    var closeResultBtn = document.createElement('div');
+    closeResultBtn.textContent = '✕';
+    closeResultBtn.style.cssText =
+      'position:absolute;top:10px;right:14px;width:28px;height:28px;line-height:28px;text-align:center;font-size:16px;color:#FFD700;cursor:pointer;border-radius:50%;transition:all 0.2s;';
+    closeResultBtn.onmouseenter = function () {
+      closeResultBtn.style.background = 'rgba(255,255,255,0.15)';
+    };
+    closeResultBtn.onmouseleave = function () {
+      closeResultBtn.style.background = 'transparent';
+    };
+    closeResultBtn.onclick = function () {
+      if (document.body.contains(overlay)) document.body.removeChild(overlay);
+    };
+    resultBox.appendChild(closeResultBtn);
+    var resultLevel = document.createElement('div');
+    resultLevel.id = 'lotResultLevel';
+    resultLevel.style.cssText = 'font-size:32px;margin-bottom:16px;';
+
+    var resultType = document.createElement('div');
+    resultType.id = 'lotResultType';
+    resultType.style.cssText = 'font-size:18px;color:#FFF8DC;margin-bottom:12px;';
+
+    var resultContent = document.createElement('div');
+    resultContent.id = 'lotResultContent';
+    resultContent.style.cssText = 'font-size:20px;color:#fff;line-height:1.6;margin-bottom:16px;padding:16px;background:rgba(0,0,0,0.2);border-radius:10px;border:2px solid #FFD700;';
+
+    var resultExplain = document.createElement('div');
+    resultExplain.id = 'lotResultExplain';
+    resultExplain.style.cssText = 'font-size:15px;color:#FFD700;line-height:1.6;margin-bottom:24px;';
+
+    var drawAgainBtn = document.createElement('button');
+    drawAgainBtn.textContent = '再抽一次';
+    drawAgainBtn.style.cssText =
+      'padding:12px 40px;font-size:18px;background:linear-gradient(135deg,#FFD700 0%,#FFA500 100%);border:none;border-radius:30px;color:#8B0000;cursor:pointer;font-family:inherit;font-weight:bold;' +
+      'box-shadow:0 5px 20px rgba(0,0,0,0.3);transition:all 0.3s ease;';
+    drawAgainBtn.onmouseenter = function () {
+      drawAgainBtn.style.transform = 'scale(1.05)';
+      drawAgainBtn.style.boxShadow = '0 8px 30px rgba(255,215,0,0.5)';
+    };
+    drawAgainBtn.onmouseleave = function () {
+      drawAgainBtn.style.transform = 'scale(1)';
+      drawAgainBtn.style.boxShadow = '0 5px 20px rgba(0,0,0,0.3)';
+    };
+
+    resultBox.appendChild(resultLevel);
+    resultBox.appendChild(resultType);
+    resultBox.appendChild(resultContent);
+    resultBox.appendChild(resultExplain);
+    resultBox.appendChild(drawAgainBtn);
+    resultOverlay.appendChild(resultBox);
+
+    overlay.appendChild(resultOverlay);
+    document.body.appendChild(overlay);
+
+    /** 填充签文到结果弹窗 */
+    function showLotResult(lot) {
+      // 更新导航栏按钮结果
+      var btnResult = document.getElementById('lotBtnResult');
+      if (btnResult) {
+        btnResult.textContent = lot.level;
+        btnResult.style.display = 'block';
+      }
+
+      resultLevel.textContent = lot.level;
+      resultLevel.style.color = '#FFD700';
+      if (lot.level === '上上签') resultLevel.style.textShadow = '0 0 20px rgba(255,215,0,0.8)';
+      else if (lot.level === '上吉签') {
+        resultLevel.style.color = '#FFA500';
+        resultLevel.style.textShadow = '0 0 15px rgba(255,165,0,0.6)';
+      } else if (lot.level === '中吉签') {
+        resultLevel.style.color = '#FFD700';
+        resultLevel.style.opacity = '0.9';
+        resultLevel.style.textShadow = 'none';
+      } else {
+        resultLevel.style.color = '#CD853F';
+        resultLevel.style.opacity = '0.8';
+        resultLevel.style.textShadow = 'none';
+      }
+      resultType.textContent = lot.type + '签';
+      resultContent.textContent = lot.content;
+      resultExplain.textContent = lot.explain;
+      resultOverlay.style.display = 'flex';
+    }
+
+    // 如果今天已抽签，直接显示结果
+    if (hasDrawnToday) {
+      showLotResult(savedLot.lot);
+      stick.style.top = '-90px';
+    }
+
+    var isDrawing = false;
+
+    /** 抽签 */
+    function drawLot() {
+      if (isDrawing) return;
+      isDrawing = true;
+
+      hint.textContent = '摇签中...';
+      cylContainer.style.animation = 'lotShake 0.7s ease-in-out';
+
+      // 400ms 后签条弹出
+      setTimeout(function () {
+        stick.style.top = '-90px';
+        stick.style.zIndex = '20';
+      }, 400);
+
+      // 动画结束后显示签文
+      setTimeout(function () {
+        var idx = Math.floor(Math.random() * LOTTERIES.length);
+        var lot = LOTTERIES[idx];
+
+        setConfig('dailyLot', { date: todayStr, lot: lot });
+        showLotResult(lot);
+        hint.textContent = '点击签筒，抽取运势签';
+
+        // 重置动画
+        setTimeout(function () {
+          cylContainer.style.animation = '';
+        }, 100);
+      }, 1400);
+    }
+
+    /** 再抽一次 */
+    function drawAgain() {
+      resultOverlay.style.display = 'none';
+      stick.style.top = '85px';
+      stick.style.zIndex = '20';
+      isDrawing = false;
+    }
+
+    // 事件绑定
+    cylContainer.addEventListener('click', drawLot);
+    drawAgainBtn.addEventListener('click', drawAgain);
+
+    // 点击遮罩关闭
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay && document.body.contains(overlay)) document.body.removeChild(overlay);
+      else if (e.target === resultOverlay && document.body.contains(overlay)) {
+        document.body.removeChild(overlay);
+      }
     });
   }
 
